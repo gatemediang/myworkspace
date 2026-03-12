@@ -1,9 +1,23 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
+import time
 
-engine = create_engine(settings.DATABASE_URL)
+def create_engine_with_retry(url, retries=10, delay=3):
+    for i in range(retries):
+        try:
+            e = create_engine(url, pool_pre_ping=True)
+            with e.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            print(f"✅ Database connected on attempt {i+1}")
+            return e
+        except Exception as ex:
+            print(f"⏳ DB not ready (attempt {i+1}/{retries}): {ex}")
+            time.sleep(delay)
+    raise RuntimeError("Could not connect to database after retries")
+
+engine = create_engine_with_retry(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

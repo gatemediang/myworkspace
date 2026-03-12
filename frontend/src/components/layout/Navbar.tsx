@@ -8,7 +8,7 @@ import { useAuthStore } from '@/lib/store';
 
 const navLinks = [
   { label: 'Meet Me', href: '/meet-me' },
-  { label: 'Tutorials', href: '/tutorials' },
+  { label: 'Blog', href: '/tutorials' },
   { label: 'FreeBies', href: '/freebies' },
   { label: 'Shop', href: '/shop' },
 ];
@@ -45,6 +45,11 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {user && ['admin', 'superuser', 'instructor'].includes(user.role) && (
+              <Link href="/admin" className={`nav-link ${pathname.startsWith('/admin') ? 'active' : ''}`} style={{color:'var(--green)', fontWeight:700}}>
+                Dashboard
+              </Link>
+            )}
           </div>
 
           {/* Right Side */}
@@ -59,7 +64,7 @@ export default function Navbar() {
                 </button>
                 {userMenuOpen && (
                   <div className="absolute right-0 top-full mt-2 w-48 glass-card py-2 rounded-xl">
-                    {(user.role === 'admin' || user.role === 'instructor') && (
+                    {(['admin', 'superuser', 'instructor'].includes(user.role)) && (
                       <Link href="/admin" className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--green)] transition-colors">
                         <Settings size={14} /> Admin Dashboard
                       </Link>
@@ -95,8 +100,8 @@ export default function Navbar() {
             ))}
             {user ? (
               <>
-                {(user.role === 'admin' || user.role === 'instructor') && (
-                  <Link href="/admin" onClick={() => setMobileOpen(false)} className="block py-3 text-[var(--green)] font-semibold">Admin Dashboard</Link>
+                {(['admin', 'superuser', 'instructor'].includes(user.role)) && (
+                  <Link href="/admin" onClick={() => setMobileOpen(false)} className="block py-3 text-[var(--green)] font-semibold">Dashboard</Link>
                 )}
                 <button onClick={() => { logout(); setMobileOpen(false); }} className="block py-3 text-red-400 font-semibold">Logout</button>
               </>

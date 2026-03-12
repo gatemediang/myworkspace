@@ -1,0 +1,22 @@
+{
+  "name": "MyWorkSpace",
+  "forwardPorts": [3000, 8000, 5432],
+  "portsAttributes": {
+    "3000": {
+      "label": "Frontend",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    },
+    "8000": {
+      "label": "Backend API",
+      "onAutoForward": "silent",
+      "visibility": "public"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    }
+  },
+  "postStartCommand": "cd /workspaces/myworkspace && docker compose up -d"
+}

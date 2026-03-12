@@ -23,8 +23,7 @@ export default function FreebiesPage() {
     setSubmitting(true);
     try {
       const res = await api.post('/freebies/download', { freebie_id: modal.freebie?.id, ...form });
-      toast.success(res.data.message);
-      window.open(res.data.download_url, '_blank');
+      toast.success(res.data.message || 'Check your email to confirm and get your download!');
       setModal({ open: false, freebie: null });
       setForm({ full_name: '', email: '' });
     } catch {
@@ -113,6 +112,9 @@ export default function FreebiesPage() {
                   {submitting ? 'Processing...' : <><Download size={14} /> Download</>}
                 </button>
               </div>
+              <p className="text-xs text-center" style={{ color: 'var(--text-secondary)' }}>
+                📧 By downloading, you automatically subscribe to our <strong style={{ color: 'var(--green)' }}>Tech Newsletter</strong>. You can unsubscribe anytime.
+              </p>
             </form>
           </div>
         </div>

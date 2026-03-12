@@ -1,8 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ChevronDown, Github, ExternalLink, Mail, Phone, User } from 'lucide-react';
+import { ArrowRight, ChevronDown, Github, ExternalLink, Mail, Phone, User, Users, ChevronLeft, ChevronRight, ExternalLink as LinkIcon, Calendar, Clock } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
@@ -16,27 +16,243 @@ const CATEGORIES = [
   { key: 'fullstack', label: 'FullStack APPs' },
 ];
 
+const DEFAULT_PHRASES = [
+  'Welcome To My Workspace',
+  'I Offer Data/AI Powered Solutions',
+  'Be My Guest',
+];
+
+// ── Multi-phrase typewriter hook ─────────────────────────────────
+
+function useTypewriter(phrases: string[]) {
+  const [display, setDisplay] = useState('');
+  const phraseIdx = useRef(0);
+  const charIdx = useRef(0);
+  const deleting = useRef(false);
+
+  useEffect(() => {
+    const tick = () => {
+      const current = phrases[phraseIdx.current];
+      if (!deleting.current) {
+        // typing forward
+        charIdx.current += 1;
+        setDisplay(current.slice(0, charIdx.current));
+        if (charIdx.current === current.length) {
+          // finished typing — pause then start deleting
+          deleting.current = true;
+          return 1800;
+        }
+        return 75;
+      } else {
+        // deleting
+        charIdx.current -= 1;
+        setDisplay(current.slice(0, charIdx.current));
+        if (charIdx.current === 0) {
+          // finished deleting — move to next phrase
+          deleting.current = false;
+          phraseIdx.current = (phraseIdx.current + 1) % phrases.length;
+          return 400; // brief pause before next phrase
+        }
+        return 40;
+      }
+    };
+
+    let timeout: ReturnType<typeof setTimeout>;
+    const run = () => {
+      const delay = tick();
+      timeout = setTimeout(run, delay);
+    };
+    timeout = setTimeout(run, 500);
+    return () => clearTimeout(timeout);
+  }, [phrases]);
+
+  return display;
+}
+
+// ── Hero image slider ────────────────────────────────────────────
+interface HeroSlide {
+  id: number;
+  image_url: string;
+  caption?: string;
+  tutorial_slug?: string;
+  tutorial_title?: string;
+}
+
+const FALLBACK_SLIDES: HeroSlide[] = [
+  { id: 0, image_url: '/images/hero_slides/s1.png', caption: 'Train & Score — Deep Learning Image Pipeline' },
+  { id: 1, image_url: '/images/hero_slides/s2.png', caption: 'ML Ops — where Machine Learning meets DevOps & Data Engineering' },
+  { id: 2, image_url: '/images/hero_slides/s4.png', caption: 'Integrating the ML Pipeline for Success' },
+];
+
+function HeroSlider({ slides }: { slides: HeroSlide[] }) {
+  const list = slides.length > 0 ? slides : FALLBACK_SLIDES;
+  const [current, setCurrent] = useState(0);
+  const [fading, setFading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const goTo = useCallback((idx: number) => {
+    if (idx === current || fading) return;
+    setFading(true);
+    setTimeout(() => {
+      setCurrent(idx);
+      setFading(false);
+    }, 350);
+  }, [current, fading]);
+
+  const prev = () => goTo((current - 1 + list.length) % list.length);
+  const next = useCallback(() => goTo((current + 1) % list.length), [current, goTo, list.length]);
+
+  // Auto-advance every 5 s
+  useEffect(() => {
+    if (list.length <= 1) return;
+    timerRef.current = setTimeout(next, 5000);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [current, next, list.length]);
+
+  const slide = list[current];
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const imgSrc = slide.image_url.startsWith('/uploads')
+    ? `${apiBase}${slide.image_url}`
+    : slide.image_url;
+
+  return (
+    <div
+      className="relative overflow-hidden"
+      style={{
+        borderRadius: '5px',
+        width: 'min(480px, 90vw)',
+        aspectRatio: '1 / 1',
+        border: '1px solid rgba(0,200,255,0.25)',
+        boxShadow: '0 0 40px rgba(0,168,98,0.15)',
+      }}
+    >
+      {/* Slide image */}
+      <div
+        style={{
+          opacity: fading ? 0 : 1,
+          transition: 'opacity 0.35s ease',
+          position: 'absolute', inset: 0,
+        }}
+      >
+        <Image
+          src={imgSrc}
+          alt={slide.caption || 'Hero image'}
+          fill
+          className="object-cover"
+          priority={current === 0}
+        />
+      </div>
+
+      {/* Edge vignette */}
+      <div
+        className="absolute inset-0 pointer-events-none z-10"
+        style={{
+          background:
+            'linear-gradient(to right, #020c18 0%, transparent 12%, transparent 88%, #020c18 100%)',
+        }}
+      />
+
+      {/* Caption + tutorial link */}
+      {(slide.caption || slide.tutorial_slug) && (
+        <div
+          className="absolute bottom-0 left-0 right-0 z-20 px-4 py-3"
+          style={{
+            background: 'linear-gradient(to top, rgba(2,12,24,0.92) 0%, transparent 100%)',
+          }}
+        >
+          {slide.caption && (
+            <p className="text-xs text-[var(--text-secondary)] leading-snug mb-1">{slide.caption}</p>
+          )}
+          {slide.tutorial_slug && (
+            <Link
+              href={`/tutorials/${slide.tutorial_slug}`}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--green)] hover:underline"
+            >
+              {slide.tutorial_title || 'View Tutorial'} <LinkIcon size={11} />
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* Prev / Next arrows — only shown when >1 slide */}
+      {list.length > 1 && (
+        <>
+          <button
+            onClick={prev}
+            aria-label="Previous slide"
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center w-8 h-8 rounded-full transition-all"
+            style={{ background: 'rgba(2,12,24,0.6)', border: '1px solid rgba(0,200,255,0.25)' }}
+          >
+            <ChevronLeft size={16} className="text-[var(--text-primary)]" />
+          </button>
+          <button
+            onClick={next}
+            aria-label="Next slide"
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center w-8 h-8 rounded-full transition-all"
+            style={{ background: 'rgba(2,12,24,0.6)', border: '1px solid rgba(0,200,255,0.25)' }}
+          >
+            <ChevronRight size={16} className="text-[var(--text-primary)]" />
+          </button>
+        </>
+      )}
+
+      {/* Dot indicators */}
+      {list.length > 1 && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex gap-1.5">
+          {list.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goTo(i)}
+              aria-label={`Slide ${i + 1}`}
+              style={{
+                width: i === current ? '18px' : '6px',
+                height: '6px',
+                borderRadius: '3px',
+                background: i === current ? 'var(--green)' : 'rgba(255,255,255,0.3)',
+                transition: 'all 0.3s ease',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main page ────────────────────────────────────────────────────
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState('ai_ml');
   const [projects, setProjects] = useState<any[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
-  const [contactForm, setContactForm] = useState({ full_name: '', email: '', phone: '', message: '' });
+  const [contactForm, setContactForm] = useState({ full_name: '', email: '', phone: '', message: '', preferred_date: '', preferred_time: '' });
   const [submitting, setSubmitting] = useState(false);
-  const [typedText, setTypedText] = useState('');
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
+  const [heroPhrases, setHeroPhrases] = useState<string[]>(DEFAULT_PHRASES);
 
-  const heroText = 'Welcome To MyWorkSpace';
+  const typedText = useTypewriter(heroPhrases);
 
+  // Load hero phrases from CMS
   useEffect(() => {
-    let i = 0;
-    const timer = setInterval(() => {
-      if (i <= heroText.length) {
-        setTypedText(heroText.slice(0, i));
-        i++;
-      } else {
-        clearInterval(timer);
+    api.get('/site-settings/hero-phrases').then(res => {
+      if (Array.isArray(res.data?.phrases) && res.data.phrases.length === 3) {
+        setHeroPhrases(res.data.phrases);
       }
-    }, 60);
-    return () => clearInterval(timer);
+    }).catch(() => {});
+  }, []);
+
+  // Load hero slides
+  useEffect(() => {
+    api.get('/hero-slides').then(res => {
+      if (Array.isArray(res.data) && res.data.length > 0) setHeroSlides(res.data);
+    }).catch(() => {});
+
+    api.get('/clients').then(res => {
+      if (Array.isArray(res.data)) setClients(res.data);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -53,7 +269,7 @@ export default function HomePage() {
     try {
       await api.post('/contact', contactForm);
       toast.success('Message sent! I will get back to you soon.');
-      setContactForm({ full_name: '', email: '', phone: '', message: '' });
+      setContactForm({ full_name: '', email: '', phone: '', message: '', preferred_date: '', preferred_time: '' });
     } catch {
       toast.error('Failed to send. Please try again.');
     } finally {
@@ -65,34 +281,51 @@ export default function HomePage() {
     <div className="page-wrapper">
       <Navbar />
 
-      {/* ===== HERO / LANDING ===== */}
-      <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden bg-grid" style={{ background: 'linear-gradient(135deg, #020c18 0%, #040f1e 50%, #020c18 100%)' }}>
-        {/* BG Image */}
-        <div className="absolute inset-0 flex items-center justify-end pr-0 md:pr-20 opacity-20 md:opacity-30 pointer-events-none">
-          <Image src="/images/landing_page.png" alt="AI Brain" width={600} height={600} className="object-contain w-auto h-[70vh] max-h-[600px]" />
-        </div>
-
+      {/* ===== HERO ===== */}
+      <section
+        id="home"
+        className="relative min-h-screen flex items-center overflow-hidden bg-grid"
+        style={{ background: 'linear-gradient(135deg, #020c18 0%, #040f1e 50%, #020c18 100%)' }}
+      >
         {/* Ambient glows */}
-        <div className="absolute top-1/3 left-1/4 w-96 h-96 rounded-full opacity-10 pointer-events-none" style={{ background: 'radial-gradient(circle, var(--green) 0%, transparent 70%)' }} />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full opacity-8 pointer-events-none" style={{ background: 'radial-gradient(circle, var(--cyan) 0%, transparent 70%)' }} />
+        <div className="absolute top-1/3 left-1/4 w-96 h-96 rounded-full opacity-10 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, var(--green) 0%, transparent 70%)' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, var(--cyan) 0%, transparent 70%)', opacity: 0.07 }} />
 
         <div className="container-xl relative z-10 pt-24 pb-16">
-          <div className="max-w-3xl">
-            <div className="section-tag mb-6">Portfolio 2026</div>
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black leading-tight mb-6" style={{ fontFamily: 'Orbitron, monospace' }}>
-              <span className="typing-cursor">{typedText}</span>
-            </h1>
-            <p className="text-xl text-[var(--text-secondary)] mb-8 max-w-xl leading-relaxed">
-              AI/ML Engineer. Data Analyst. Full Stack Developer. Building intelligent systems and sharing knowledge with the world.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <a href="#projects" className="btn-primary">
-                View Projects <ArrowRight size={18} />
-              </a>
-              <a href="#contact" className="btn-secondary">
-                Book a Call
-              </a>
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+
+            {/* LEFT — text */}
+            <div className="flex-1 max-w-xl">
+              <div className="section-tag mb-5">Portfolio 2026</div>
+
+              <h1
+                className="text-2xl md:text-3xl font-black leading-tight mb-5"
+                style={{ fontFamily: 'Orbitron, monospace', minHeight: '2.5rem' }}
+              >
+                <span className="typing-cursor">{typedText}</span>
+              </h1>
+
+              <p className="text-base text-[var(--text-secondary)] mb-8 leading-relaxed">
+                AI/ML Engineer. Data Analyst. Full Stack Developer.<br />
+                Building intelligent systems and sharing knowledge with the world.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <a href="#projects" className="btn-primary">
+                  View Projects <ArrowRight size={18} />
+                </a>
+                <a href="#contact" className="btn-secondary">
+                  Book a Call
+                </a>
+              </div>
             </div>
+
+            {/* RIGHT — hero image slider */}
+            <div className="flex-1 flex justify-center lg:justify-end">
+              <HeroSlider slides={heroSlides} />
+            </div>
+
           </div>
         </div>
 
@@ -111,7 +344,6 @@ export default function HomePage() {
             <h2 className="section-title mt-2">Featured <span>Projects</span></h2>
           </div>
 
-          {/* Tabs */}
           <div className="flex flex-wrap justify-center gap-3 mb-10">
             {CATEGORIES.map((cat) => (
               <button key={cat.key} onClick={() => setActiveTab(cat.key)}
@@ -121,7 +353,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Project grid */}
           {loadingProjects ? (
             <div className="flex justify-center py-16">
               <div className="spinner w-10 h-10 border-4"></div>
@@ -137,9 +368,11 @@ export default function HomePage() {
                 <div key={project.id} className="project-card group">
                   {project.image_url && (
                     <div className="relative h-48 overflow-hidden">
-                      <img src={`${process.env.NEXT_PUBLIC_API_URL}${project.image_url}`}
+                      <img
+                        src={`${process.env.NEXT_PUBLIC_API_URL}${project.image_url}`}
                         alt={project.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
                       <div className="overlay" />
                       <div className="absolute top-3 left-3">
                         <span className="badge badge-green">{project.category?.replace('_', ' ')}</span>
@@ -147,7 +380,8 @@ export default function HomePage() {
                     </div>
                   )}
                   <div className="p-5">
-                    <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2" style={{ fontFamily: 'Orbitron, monospace', fontSize: '1rem' }}>
+                    <h3 className="font-bold text-[var(--text-primary)] mb-2"
+                      style={{ fontFamily: 'Orbitron, monospace', fontSize: '1rem' }}>
                       {project.title}
                     </h3>
                     <p className="text-sm text-[var(--text-secondary)] mb-4 leading-relaxed line-clamp-3">
@@ -156,7 +390,10 @@ export default function HomePage() {
                     {project.tech_stack?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-4">
                         {project.tech_stack.slice(0, 4).map((tech: string) => (
-                          <span key={tech} className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(0,200,255,0.1)', color: 'var(--cyan)', border: '1px solid rgba(0,200,255,0.2)' }}>{tech}</span>
+                          <span key={tech} className="text-xs px-2 py-0.5 rounded"
+                            style={{ background: 'rgba(0,200,255,0.1)', color: 'var(--cyan)', border: '1px solid rgba(0,200,255,0.2)' }}>
+                            {tech}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -165,12 +402,14 @@ export default function HomePage() {
                         Read More <ArrowRight size={14} />
                       </Link>
                       {project.github_url && (
-                        <a href={project.github_url} target="_blank" rel="noopener noreferrer" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                        <a href={project.github_url} target="_blank" rel="noopener noreferrer"
+                          className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                           <Github size={18} />
                         </a>
                       )}
                       {project.live_url && (
-                        <a href={project.live_url} target="_blank" rel="noopener noreferrer" className="text-[var(--text-secondary)] hover:text-[var(--green)] transition-colors">
+                        <a href={project.live_url} target="_blank" rel="noopener noreferrer"
+                          className="text-[var(--text-secondary)] hover:text-[var(--green)] transition-colors">
                           <ExternalLink size={18} />
                         </a>
                       )}
@@ -185,11 +424,11 @@ export default function HomePage() {
 
       {/* ===== CONTACT ===== */}
       <section id="contact" className="py-20 relative overflow-hidden" style={{ background: '#020c18' }}>
-        {/* BG */}
         <div className="absolute inset-0 opacity-10 pointer-events-none">
           <Image src="/images/contact_me.png" alt="" fill className="object-cover" />
         </div>
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, #020c18, rgba(2,12,24,0.6), #020c18)' }} />
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: 'linear-gradient(to bottom, #020c18, rgba(2,12,24,0.6), #020c18)' }} />
 
         <div className="container-xl relative z-10">
           <div className="text-center mb-12">
@@ -203,29 +442,49 @@ export default function HomePage() {
                 <div>
                   <label className="form-label">Full Name</label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={16} />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" size={16} />
                     <input type="text" required value={contactForm.full_name}
                       onChange={e => setContactForm(p => ({ ...p, full_name: e.target.value }))}
-                      className="form-input pl-10" placeholder="Your full name" />
+                      className="form-input" style={{ paddingLeft: '2.5rem' }} placeholder="Your full name" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="form-label">Email Address</label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={16} />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" size={16} />
                       <input type="email" required value={contactForm.email}
                         onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))}
-                        className="form-input pl-10" placeholder="your@email.com" />
+                        className="form-input" style={{ paddingLeft: '2.5rem' }} placeholder="your@email.com" />
                     </div>
                   </div>
                   <div>
                     <label className="form-label">Phone <span className="normal-case opacity-60">(optional)</span></label>
                     <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={16} />
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" size={16} />
                       <input type="tel" value={contactForm.phone}
                         onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))}
-                        className="form-input pl-10" placeholder="+44 xxx xxx xxxx" />
+                        className="form-input" style={{ paddingLeft: '2.5rem' }} placeholder="+44 xxx xxx xxxx" />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label">Preferred Date <span className="normal-case opacity-60">(optional)</span></label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" size={16} />
+                      <input type="date" value={contactForm.preferred_date}
+                        onChange={e => setContactForm(p => ({ ...p, preferred_date: e.target.value }))}
+                        className="form-input" style={{ paddingLeft: '2.5rem', colorScheme: 'dark' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="form-label">Preferred Time <span className="normal-case opacity-60">(optional)</span></label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" size={16} />
+                      <input type="time" value={contactForm.preferred_time}
+                        onChange={e => setContactForm(p => ({ ...p, preferred_time: e.target.value }))}
+                        className="form-input" style={{ paddingLeft: '2.5rem', colorScheme: 'dark' }} />
                     </div>
                   </div>
                 </div>
@@ -236,13 +495,63 @@ export default function HomePage() {
                     className="form-input resize-none h-32" placeholder="Tell me what you need..." />
                 </div>
                 <button type="submit" disabled={submitting} className="btn-primary w-full justify-center">
-                  {submitting ? <><span className="spinner w-4 h-4 border-2 mr-2"></span>Sending...</> : 'Submit Message'}
+                  {submitting
+                    ? <><span className="spinner w-4 h-4 border-2 mr-2"></span>Sending...</>
+                    : 'Submit Message'}
                 </button>
               </form>
             </div>
           </div>
         </div>
       </section>
+
+
+      {/* ===== CLIENTELE ===== */}
+      {clients.length > 0 && (
+        <section className="py-16" style={{ background: '#020c18', borderTop: '1px solid rgba(0,200,255,0.08)' }}>
+          <div className="container-xl">
+            <div className="text-center mb-10">
+              <div className="section-tag">Trusted By</div>
+              <h2 className="section-title mt-2">Our <span>Clientele</span></h2>
+            </div>
+            <div className="flex flex-wrap gap-6 items-center justify-center">
+              {clients.map((client: any) => (
+                <div key={client.id}
+                  className="glass-card rounded-2xl overflow-hidden flex flex-col"
+                  style={{
+                    width: '220px', height: '220px', flexShrink: 0,
+                    border: '1px solid rgba(0,200,255,0.2)',
+                    transition: 'border-color 0.2s, transform 0.2s',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,255,0.5)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,255,0.2)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                  }}
+                >
+                  <div className="flex-1 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(255,255,255,0.03)' }}>
+                    {client.logo_url ? (
+                      <img src={`${process.env.NEXT_PUBLIC_API_URL}${client.logo_url}`}
+                        alt={client.name} className="object-contain"
+                        style={{ maxWidth: '160px', maxHeight: '130px', filter: 'brightness(0.9) saturate(0.75)' }} />
+                    ) : (
+                      <span className="text-4xl font-black text-[var(--text-secondary)]">{client.name[0]}</span>
+                    )}
+                  </div>
+                  <div className="px-3 py-3 text-center"
+                    style={{ borderTop: '1px solid rgba(0,200,255,0.15)', background: 'rgba(0,200,255,0.04)' }}>
+                    <p className="text-xs font-bold text-[var(--text-primary)] line-clamp-2">{client.name}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <Footer />
       <ChatBot />

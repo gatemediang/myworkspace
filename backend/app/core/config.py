@@ -1,9 +1,10 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 
+
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/workspace_db"
-    SECRET_KEY: str = "change-this-secret-key"
+    SECRET_KEY: str = "dev-secret-key-change-in-production-32chars"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 52428800
 
     class Config:
+        # env_file is optional — if absent Docker still passes env vars directly
         env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"
+
 
 settings = Settings()

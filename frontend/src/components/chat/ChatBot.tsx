@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, MessageCircle, Bot } from 'lucide-react';
+import { X, Send, Bot } from 'lucide-react';
+import Image from 'next/image';
 import api from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 
@@ -10,23 +11,50 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
-  'How can I help you today?',
+  'Tell me about your projects?',
   'Book an appointment?',
-  'Tell me about projects?',
+  'What tutorials are available?',
 ];
+// FAQs loaded dynamically from admin
+
+// ─────────────────────────────────────────────────────────────────
+// CHATBOT AVATAR CONFIG
+// To use a custom profile photo:
+//   1. Place your image in /frontend/public/images/  (e.g. profile.jpg)
+//   2. Change CHATBOT_PHOTO below to '/images/profile.jpg'
+//   3. Rebuild Docker: docker compose up --build -d
+//
+// Leave as null to use the default robot icon.
+// Admin can also upload via Admin → Site Settings → Chatbot Photo.
+// ─────────────────────────────────────────────────────────────────
+const CHATBOT_PHOTO: string | null = null;
 
 export default function ChatBot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [chatbotPhoto, setChatbotPhoto] = useState<string | null>(CHATBOT_PHOTO);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load chatbot photo from site settings (admin-configurable)
+  useEffect(() => {
+    api.get('/site-settings/chatbot_photo').then(res => {
+      if (res.data?.value) setChatbotPhoto(res.data.value);
+    }).catch(() => {});
+  }, []);
+
+  const [faqs, setFaqs] = useState<{id:number;question:string;answer:string}[]>([]);
+
+  useEffect(() => {
+    api.get('/faqs').then(res => setFaqs(res.data || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (open && messages.length === 0) {
       setMessages([{
         role: 'model',
-        content: "Hi! I'm your AI assistant for **MyWorkSpace**. I can answer questions about projects, tutorials, book appointments, and more. How can I help you today?"
+        content: "Hi! I am Gab, Tunji's Personal Assistant 👋 How can I help you today?"
       }]);
     }
   }, [open]);
@@ -44,8 +72,7 @@ export default function ChatBot() {
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       const res = await api.post('/chat', { message: text, history });
-      const botMsg: Message = { role: 'model', content: res.data.response };
-      setMessages(prev => [...prev, botMsg]);
+      setMessages(prev => [...prev, { role: 'model', content: res.data.response }]);
       if (res.data.appointment_booked) {
         setTimeout(() => {
           setMessages(prev => [...prev, {
@@ -55,11 +82,38 @@ export default function ChatBot() {
         }, 500);
       }
     } catch {
-      setMessages(prev => [...prev, { role: 'model', content: 'Sorry, I encountered an error. Please try again or use the contact form.' }]);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        content: 'Sorry, I encountered an error. Please try again or use the contact form.'
+      }]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Reusable avatar — profile photo if set, robot icon otherwise
+  const AvatarBubble = ({ size = 56 }: { size?: number }) => (
+    <div
+      className="rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
+      style={{
+        width: size, height: size,
+        border: '2px solid var(--cyan)',
+        boxShadow: '0 0 16px rgba(0,200,255,0.35)',
+        background: 'var(--blue-mid)',
+      }}
+    >
+      {chatbotPhoto ? (
+        <Image
+          src={chatbotPhoto.startsWith('/uploads') ? `${process.env.NEXT_PUBLIC_API_URL}${chatbotPhoto}` : chatbotPhoto}
+          alt="AI Assistant"
+          width={size} height={size}
+          className="object-cover w-full h-full"
+        />
+      ) : (
+        <Bot style={{ color: 'var(--cyan)', width: size * 0.5, height: size * 0.5 }} />
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -70,14 +124,17 @@ export default function ChatBot() {
           className="fixed bottom-6 right-6 z-50 flex flex-col items-center gap-1 group"
           aria-label="Open chat"
         >
-          <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[var(--cyan)] shadow-lg group-hover:scale-105 transition-transform"
-            style={{ boxShadow: '0 0 20px rgba(0,200,255,0.4)' }}>
-            <div className="w-full h-full bg-[var(--blue-mid)] flex items-center justify-center">
-              <Bot className="text-[var(--cyan)]" size={28} />
-            </div>
+          <div className="group-hover:scale-105 transition-transform">
+            <AvatarBubble size={56} />
           </div>
-          <span className="text-xs font-bold text-[var(--cyan)] uppercase tracking-widest"
-            style={{ textShadow: '0 0 10px rgba(0,200,255,0.6)', fontFamily: 'Orbitron, monospace' }}>
+          <span
+            className="text-xs font-bold uppercase tracking-widest"
+            style={{
+              color: 'var(--cyan)',
+              textShadow: '0 0 10px rgba(0,200,255,0.6)',
+              fontFamily: 'Orbitron, monospace',
+            }}
+          >
             ASK ME
           </span>
         </button>
@@ -90,11 +147,12 @@ export default function ChatBot() {
           style={{ height: '520px', background: '#0a1628', border: '1px solid var(--cyan)', boxShadow: '0 0 40px rgba(0,168,98,0.2)' }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4" style={{ background: 'linear-gradient(135deg, #0d2137 0%, #0a1628 100%)', borderBottom: '1px solid rgba(0,200,255,0.2)' }}>
+          <div
+            className="flex items-center justify-between p-4"
+            style={{ background: 'linear-gradient(135deg, #0d2137 0%, #0a1628 100%)', borderBottom: '1px solid rgba(0,200,255,0.2)' }}
+          >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[var(--blue-mid)] border-2 border-[var(--cyan)] flex items-center justify-center">
-                <Bot className="text-[var(--cyan)]" size={18} />
-              </div>
+              <AvatarBubble size={40} />
               <div>
                 <p className="font-bold text-sm text-[var(--text-primary)]" style={{ fontFamily: 'Orbitron, monospace' }}>ASK ME</p>
                 <p className="text-xs text-[var(--green)]">● Online</p>
@@ -133,9 +191,10 @@ export default function ChatBot() {
             {loading && (
               <div className="flex justify-start">
                 <div className="chat-bubble-bot px-4 py-3 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[var(--green)] animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-2 h-2 rounded-full bg-[var(--green)] animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-2 h-2 rounded-full bg-[var(--green)] animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  {[0, 150, 300].map(delay => (
+                    <span key={delay} className="w-2 h-2 rounded-full bg-[var(--green)] animate-bounce"
+                      style={{ animationDelay: `${delay}ms` }} />
+                  ))}
                 </div>
               </div>
             )}
@@ -147,11 +206,18 @@ export default function ChatBot() {
             <div className="flex items-center gap-2">
               <input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
                 placeholder="Type a message..."
-                className="flex-1 bg-[rgba(10,22,40,0.9)] border border-[rgba(0,200,255,0.2)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none focus:border-[var(--cyan)] transition-colors"
-                style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                className="flex-1 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
+                style={{
+                  background: 'rgba(10,22,40,0.9)',
+                  border: '1px solid rgba(0,200,255,0.2)',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'Rajdhani, sans-serif',
+                }}
+                onFocus={e => (e.target.style.borderColor = 'var(--cyan)')}
+                onBlur={e => (e.target.style.borderColor = 'rgba(0,200,255,0.2)')}
               />
               <button
                 onClick={() => sendMessage(input)}
