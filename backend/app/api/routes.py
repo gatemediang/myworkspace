@@ -30,13 +30,27 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 router = APIRouter()
 
 # ─── UTILS ────────────────────────────────────────────────────────
-def save_upload(file: UploadFile, folder: str) -> str:
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "svg"}
+ALLOWED_DOCUMENT_EXTENSIONS = {"pdf", "zip", "docx", "xlsx", "pptx", "ipynb", "csv"}
+ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_DOCUMENT_EXTENSIONS
+
+def save_upload(file: UploadFile, folder: str, allowed_exts: set = None) -> str:
+    """Save an uploaded file after validating type and size."""
+    if file is None or not file.filename:
+        raise HTTPException(400, "No file provided")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    permitted = allowed_exts if allowed_exts is not None else ALLOWED_EXTENSIONS
+    if ext not in permitted:
+        raise HTTPException(400, f"File type '.{ext}' is not allowed. Permitted: {sorted(permitted)}")
+    # Read content to check size
+    content = file.file.read()
+    if len(content) > settings.MAX_FILE_SIZE:
+        raise HTTPException(413, f"File too large. Maximum size is {settings.MAX_FILE_SIZE // 1024 // 1024} MB")
     os.makedirs(f"{settings.UPLOAD_DIR}/{folder}", exist_ok=True)
-    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
     filename = f"{uuid.uuid4()}.{ext}"
     path = f"{settings.UPLOAD_DIR}/{folder}/{filename}"
     with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        f.write(content)
     return f"/uploads/{folder}/{filename}"
 
 def notify_admins(db: Session, title: str, message: str, link: str = ""):
@@ -115,6 +129,49 @@ async def chat(req: ChatMessage, db: Session = Depends(get_db)):
     return await chat_with_rag(req.message, req.history, db)
 
 # ─── SITE SETTINGS (public read, admin write) ─────────────────────
+# NOTE: Specific sub-routes MUST be declared before the wildcard {key}
+# routes so FastAPI matches them first.
+
+class HeroPhrasesRequest(BaseModel):
+    phrase1: str
+    phrase2: str
+    phrase3: str
+
+@router.get("/site-settings/hero-phrases")
+def get_hero_phrases(db: Session = Depends(get_db)):
+    s = db.query(SiteSettings).filter(SiteSettings.key == "hero_phrases").first()
+    if s:
+        import json as _json
+        try:
+            phrases = _json.loads(s.value)
+            return {"phrases": phrases}
+        except Exception:
+            pass
+    return {"phrases": [
+        "Welcome To My Workspace",
+        "I Offer Data/AI Powered Solutions",
+        "Be My Guest"
+    ]}
+
+@router.put("/admin/site-settings/hero-phrases")
+def update_hero_phrases(
+    req: HeroPhrasesRequest,
+    db: Session = Depends(get_db), _: User = Depends(require_admin)
+):
+    import json as _json
+    phrases = [req.phrase1.strip(), req.phrase2.strip(), req.phrase3.strip()]
+    if any(len(p) == 0 for p in phrases):
+        raise HTTPException(400, "All three phrases must be non-empty.")
+    value = _json.dumps(phrases)
+    s = db.query(SiteSettings).filter(SiteSettings.key == "hero_phrases").first()
+    if not s:
+        s = SiteSettings(key="hero_phrases", value=value)
+        db.add(s)
+    else:
+        s.value = value
+    db.commit()
+    return {"success": True, "phrases": phrases}
+
 @router.get("/site-settings/{key}")
 def get_site_setting(key: str, db: Session = Depends(get_db)):
     s = db.query(SiteSettings).filter(SiteSettings.key == key).first()
@@ -167,27 +224,27 @@ def get_hero_slides(db: Session = Depends(get_db)):
             "id": s.id,
             "image_url": s.image_url,
             "caption": s.caption,
+            "subtitle": s.subtitle,
+            "link_url": s.link_url,
             "order_index": s.order_index,
             "tutorial_slug": s.tutorial.slug if s.tutorial and s.tutorial.is_published else None,
-            "tutorial_title": s.tutorial.title if s.tutorial and s.tutorial.is_published else None,
         }
         for s in slides
     ]
 
 @router.get("/admin/hero-slides")
 def admin_get_hero_slides(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """Admin endpoint — returns all slides (active + inactive)."""
     slides = db.query(HeroSlide).order_by(HeroSlide.order_index).all()
     return [
         {
             "id": s.id,
             "image_url": s.image_url,
             "caption": s.caption,
+            "subtitle": s.subtitle,
+            "link_url": s.link_url,
             "order_index": s.order_index,
             "is_active": s.is_active,
             "tutorial_id": s.tutorial_id,
-            "tutorial_slug": s.tutorial.slug if s.tutorial else None,
-            "tutorial_title": s.tutorial.title if s.tutorial else None,
         }
         for s in slides
     ]
@@ -195,26 +252,22 @@ def admin_get_hero_slides(db: Session = Depends(get_db), _: User = Depends(requi
 @router.post("/admin/hero-slides")
 async def create_hero_slide(
     caption: str = Form(""),
-    tutorial_id: Optional[int] = Form(None),
+    subtitle: str = Form(""),
+    link_url: str = Form(""),
     order_index: int = Form(0),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    # Enforce max 5 active slides
     active_count = db.query(HeroSlide).filter(HeroSlide.is_active == True).count()
     if active_count >= 5:
-        raise HTTPException(400, "Maximum of 5 hero slides allowed. Deactivate or delete an existing slide first.")
+        raise HTTPException(400, "Maximum of 5 active slides allowed.")
     image_url = save_upload(image, "hero_slides")
-    # Validate tutorial_id if provided
-    if tutorial_id:
-        t = db.query(Tutorial).filter(Tutorial.id == tutorial_id, Tutorial.is_published == True).first()
-        if not t:
-            raise HTTPException(400, "Tutorial not found or not published.")
     slide = HeroSlide(
         image_url=image_url,
         caption=caption,
-        tutorial_id=tutorial_id or None,
+        subtitle=subtitle,
+        link_url=link_url or None,
         order_index=order_index,
     )
     db.add(slide)
@@ -226,7 +279,8 @@ async def create_hero_slide(
 async def update_hero_slide(
     id: int,
     caption: str = Form(""),
-    tutorial_id: Optional[int] = Form(None),
+    subtitle: str = Form(""),
+    link_url: str = Form(""),
     order_index: int = Form(0),
     is_active: bool = Form(True),
     image: Optional[UploadFile] = File(None),
@@ -236,20 +290,16 @@ async def update_hero_slide(
     slide = db.query(HeroSlide).filter(HeroSlide.id == id).first()
     if not slide:
         raise HTTPException(404, "Slide not found.")
-    # Enforce max 5 active when activating
     if is_active and not slide.is_active:
         active_count = db.query(HeroSlide).filter(HeroSlide.is_active == True).count()
         if active_count >= 5:
-            raise HTTPException(400, "Maximum of 5 hero slides already active.")
-    if tutorial_id:
-        t = db.query(Tutorial).filter(Tutorial.id == tutorial_id, Tutorial.is_published == True).first()
-        if not t:
-            raise HTTPException(400, "Tutorial not found or not published.")
+            raise HTTPException(400, "Maximum of 5 active slides allowed.")
     slide.caption = caption
-    slide.tutorial_id = tutorial_id or None
+    slide.subtitle = subtitle
+    slide.link_url = link_url or None
     slide.order_index = order_index
     slide.is_active = is_active
-    if image:
+    if image and image.filename:
         slide.image_url = save_upload(image, "hero_slides")
     db.commit()
     return {"success": True}
@@ -607,46 +657,7 @@ def get_site_logo(db: Session = Depends(get_db)):
     s = db.query(SiteSettings).filter(SiteSettings.key == "site_logo").first()
     return {"url": s.value if s else None}
 
-# ─── HERO PHRASES CMS ────────────────────────────────────────────
-class HeroPhrasesRequest(BaseModel):
-    phrase1: str
-    phrase2: str
-    phrase3: str
-
-@router.get("/site-settings/hero-phrases")
-def get_hero_phrases(db: Session = Depends(get_db)):
-    s = db.query(SiteSettings).filter(SiteSettings.key == "hero_phrases").first()
-    if s:
-        import json as _json
-        try:
-            phrases = _json.loads(s.value)
-            return {"phrases": phrases}
-        except Exception:
-            pass
-    return {"phrases": [
-        "Welcome To My Workspace",
-        "I Offer Data/AI Powered Solutions",
-        "Be My Guest"
-    ]}
-
-@router.put("/admin/site-settings/hero-phrases")
-def update_hero_phrases(
-    req: HeroPhrasesRequest,
-    db: Session = Depends(get_db), _: User = Depends(require_admin)
-):
-    import json as _json
-    phrases = [req.phrase1.strip(), req.phrase2.strip(), req.phrase3.strip()]
-    if any(len(p) == 0 for p in phrases):
-        raise HTTPException(400, "All three phrases must be non-empty.")
-    value = _json.dumps(phrases)
-    s = db.query(SiteSettings).filter(SiteSettings.key == "hero_phrases").first()
-    if not s:
-        s = SiteSettings(key="hero_phrases", value=value)
-        db.add(s)
-    else:
-        s.value = value
-    db.commit()
-    return {"success": True, "phrases": phrases}
+# ─── SHOP CHECKOUT (Stripe checkout sessions) ─────────────────────
 class CheckoutRequest(BaseModel):
     product_ids: List[int]
     customer_email: str
@@ -712,7 +723,7 @@ async def create_product(
     category: str = Form("ebook"),
     image: Optional[UploadFile] = File(None),
     digital_file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db), _: User = Depends(require_instructor)
+    db: Session = Depends(get_db), _: User = Depends(require_admin)
 ):
     slug = title.lower().replace(" ", "-")[:100] + f"-{uuid.uuid4().hex[:6]}"
     image_url = save_upload(image, "product_images") if image else ""
@@ -733,7 +744,7 @@ async def update_product(
     category: str = Form("ebook"), is_active: bool = Form(True),
     image: Optional[UploadFile] = File(None),
     digital_file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db), _: User = Depends(require_instructor)
+    db: Session = Depends(get_db), _: User = Depends(require_admin)
 ):
     p = db.query(Product).filter(Product.id == id).first()
     if not p:
@@ -814,7 +825,7 @@ async def create_freebie(
     title: str = Form(...), description: str = Form(""), category: str = Form("ebook"),
     image: Optional[UploadFile] = File(None),
     digital_file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db), _: User = Depends(require_instructor)
+    db: Session = Depends(get_db), _: User = Depends(require_admin)
 ):
     image_url = save_upload(image, "freebie_images") if image else ""
     file_url = save_upload(digital_file, "freebies") if digital_file else ""
@@ -832,7 +843,7 @@ async def update_freebie(
     category: str = Form("ebook"), is_active: bool = Form(True),
     image: Optional[UploadFile] = File(None),
     digital_file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db), _: User = Depends(require_instructor)
+    db: Session = Depends(get_db), _: User = Depends(require_admin)
 ):
     f = db.query(Freebie).filter(Freebie.id == id).first()
     if not f:
@@ -892,7 +903,7 @@ def submit_contact(req: ContactRequest, db: Session = Depends(get_db)):
         if req.preferred_date or req.preferred_time:
             date_time_line = f"<p><strong>Preferred Date:</strong> {req.preferred_date or '—'} &nbsp; <strong>Time:</strong> {req.preferred_time or '—'}</p>"
         send_email(
-            to_email="info@myworkspace.snipal.uk",
+            to_email=settings.ADMIN_EMAIL,
             subject=f"📩 New Contact Message from {req.full_name}",
             html_body=f"""
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#020c18;color:#e8f4ff;padding:30px;border-radius:12px;border:1px solid rgba(0,168,98,0.3)">
@@ -928,9 +939,24 @@ def delete_contact(mid: int, db: Session = Depends(get_db), _: User = Depends(re
     db.delete(m); db.commit()
     return {"success": True}
 
+# ─── APPOINTMENTS (admin view; auto-marks past appts as completed) ───
 @router.get("/admin/appointments")
 def get_appointments(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    from datetime import datetime
     appts = db.query(Appointment).order_by(Appointment.created_at.desc()).all()
+    now = datetime.now()
+    changed = False
+    for a in appts:
+        if a.status in ("pending", "confirmed") and a.preferred_date and a.preferred_time:
+            try:
+                appt_dt = datetime.strptime(f"{a.preferred_date} {a.preferred_time}", "%Y-%m-%d %H:%M")
+                if appt_dt < now:
+                    a.status = "completed"
+                    changed = True
+            except Exception:
+                pass
+    if changed:
+        db.commit()
     return [{"id": a.id, "full_name": a.full_name, "email": a.email, "phone": a.phone,
              "message": a.message, "preferred_date": a.preferred_date, "preferred_time": a.preferred_time,
              "status": a.status, "created_at": str(a.created_at)} for a in appts]
@@ -1107,6 +1133,7 @@ async def update_about(
     name: str = Form(...), title: str = Form(...), bio_paragraphs: str = Form("[]"),
     topics: str = Form("[]"), social_links: str = Form("{}"),
     photo: Optional[UploadFile] = File(None),
+    cv: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db), _: User = Depends(require_admin)
 ):
     about = db.query(AboutMe).first()
@@ -1371,15 +1398,20 @@ def get_faqs(db: Session = Depends(get_db)):
     return [{"id": f.id, "question": f.question, "answer": f.answer, "order_index": f.order_index}
             for f in db.query(FAQ).filter(FAQ.is_active==True).order_by(FAQ.order_index).all()]
 
+@router.get("/admin/faqs")
+def get_all_faqs(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    return [{"id": f.id, "question": f.question, "answer": f.answer, "order_index": f.order_index, "is_active": f.is_active}
+            for f in db.query(FAQ).order_by(FAQ.order_index).all()]
+
 @router.post("/admin/faqs")
-def create_faq(question: str = Form(...), answer: str = Form(...), order_index: int = Form(0),
+def create_faq(question: str = Form(...), answer: str = Form(''), order_index: int = Form(0),
                db: Session = Depends(get_db), _: User = Depends(require_admin)):
     f = FAQ(question=question, answer=answer, order_index=order_index)
     db.add(f); db.commit(); db.refresh(f)
     return {"id": f.id, "question": f.question, "answer": f.answer}
 
 @router.put("/admin/faqs/{fid}")
-def update_faq(fid: int, question: str = Form(...), answer: str = Form(...), order_index: int = Form(0),
+def update_faq(fid: int, question: str = Form(...), answer: str = Form(''), order_index: int = Form(0),
                db: Session = Depends(get_db), _: User = Depends(require_admin)):
     f = db.query(FAQ).filter(FAQ.id==fid).first()
     if not f: raise HTTPException(404, "Not found")
@@ -1412,7 +1444,125 @@ def update_bot_settings(system_prompt: str = Form(...),
     db.commit()
     return {"success": True}
 
-# ─── APPOINTMENT DELETE ────────────────────────────────────────────
+# ─── APPOINTMENTS: STATUS UPDATES, REMINDERS & DELETE ───────────────
+# PATCH /admin/appointments/{aid}/status  — update status + send confirmation email
+# Reminder emails are auto-scheduled (24 h and 2 h before) when confirmed.
+class AppointmentStatusUpdate(BaseModel):
+    status: str
+
+@router.patch("/admin/appointments/{aid}/status")
+async def update_appointment_status(
+    aid: int,
+    payload: AppointmentStatusUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    status = payload.status
+    a = db.query(Appointment).filter(Appointment.id == aid).first()
+    if not a:
+        raise HTTPException(404, "Not found")
+    a.status = status
+    db.commit()
+
+    # Send confirmation email to client when status changes to confirmed
+    if status == "confirmed":
+        try:
+            html = f"""
+            <div style="font-family:sans-serif;background:#020c18;color:#e2e8f0;padding:30px;border-radius:12px;">
+              <h2 style="color:#00a862;">✅ Appointment Confirmed!</h2>
+              <p>Hi <strong>{a.full_name}</strong>,</p>
+              <p>Your appointment with <strong>Tunji Ologun</strong> has been confirmed.</p>
+              <table style="margin:20px 0;border-collapse:collapse;width:100%">
+                <tr><td style="padding:8px;color:#94a3b8;">📅 Date</td><td style="padding:8px;color:#e2e8f0;font-weight:bold;">{a.preferred_date}</td></tr>
+                <tr><td style="padding:8px;color:#94a3b8;">🕐 Time</td><td style="padding:8px;color:#e2e8f0;font-weight:bold;">{a.preferred_time}</td></tr>
+                <tr><td style="padding:8px;color:#94a3b8;">💬 Message</td><td style="padding:8px;color:#e2e8f0;">{a.message}</td></tr>
+              </table>
+              <p style="color:#94a3b8;">You will receive reminders 24 hours and 2 hours before your appointment.</p>
+              <p style="color:#94a3b8;">If you need to reschedule, please reply to this email.</p>
+              <hr style="border-color:#1e3a5f;margin:20px 0"/>
+              <p style="color:#00a862;font-weight:bold;">MyWorkSpace</p>
+            </div>"""
+            send_email(a.email, "✅ Appointment Confirmed — MyWorkSpace", html)
+            # Also notify admin
+            send_email(
+                settings.ADMIN_EMAIL,
+                f"✅ Appointment Confirmed: {a.full_name}",
+                f"<p>You confirmed the appointment with <strong>{a.full_name}</strong> ({a.email}) on {a.preferred_date} at {a.preferred_time}.</p>"
+            )
+        except Exception as e:
+            print(f"[EMAIL ERROR] confirmation: {e}")
+
+    # Schedule reminders when confirmed
+    if status == "confirmed" and a.preferred_date and a.preferred_time:
+        try:
+            import asyncio
+            from app.core.config import settings as cfg
+            asyncio.create_task(schedule_appointment_reminders(a.id, cfg.DATABASE_URL))
+            print(f"[REMINDERS] Scheduled for appointment {a.id}")
+        except Exception as e:
+            print(f"[REMINDER SCHEDULE ERROR] {e}")
+
+    return {"success": True, "status": status}
+
+
+async def schedule_appointment_reminders(appointment_id: int, database_url: str):
+    """Send reminder emails to client 24h and 2h before appointment."""
+    import asyncio
+    from datetime import datetime, timedelta
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models.user import Appointment
+    
+    try:
+        engine = create_engine(database_url)
+        SessionLocal = sessionmaker(bind=engine)
+        db = SessionLocal()
+        a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        if not a or not a.preferred_date or not a.preferred_time:
+            db.close()
+            return
+
+        appt_dt = datetime.strptime(f"{a.preferred_date} {a.preferred_time}", "%Y-%m-%d %H:%M")
+        now = datetime.now()
+
+        for hours_before, label in [(24, "24 hours"), (2, "2 hours")]:
+            reminder_time = appt_dt - timedelta(hours=hours_before)
+            wait_seconds = (reminder_time - now).total_seconds()
+            if wait_seconds > 0:
+                await asyncio.sleep(wait_seconds)
+                # Re-fetch to check if still confirmed
+                a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+                if not a or a.status == "cancelled":
+                    break
+                html = f"""
+                <div style="font-family:sans-serif;background:#020c18;color:#e2e8f0;padding:30px;border-radius:12px;">
+                  <h2 style="color:#00a862;">⏰ Appointment Reminder</h2>
+                  <p>Hi <strong>{a.full_name}</strong>,</p>
+                  <p>This is a reminder that your appointment with <strong>Tunji Ologun</strong> is in <strong>{label}</strong>.</p>
+                  <table style="margin:20px 0;border-collapse:collapse;width:100%">
+                    <tr><td style="padding:8px;color:#94a3b8;">📅 Date</td><td style="padding:8px;color:#e2e8f0;font-weight:bold;">{a.preferred_date}</td></tr>
+                    <tr><td style="padding:8px;color:#94a3b8;">🕐 Time</td><td style="padding:8px;color:#e2e8f0;font-weight:bold;">{a.preferred_time}</td></tr>
+                    <tr><td style="padding:8px;color:#94a3b8;">💬 Purpose</td><td style="padding:8px;color:#e2e8f0;">{a.message}</td></tr>
+                  </table>
+                  <p style="color:#94a3b8;">If you need to reschedule, please reply to this email.</p>
+                  <hr style="border-color:#1e3a5f;margin:20px 0"/>
+                  <p style="color:#00a862;font-weight:bold;">MyWorkSpace</p>
+                </div>"""
+                try:
+                    send_email(a.email, f"⏰ Reminder: Appointment in {label} — MyWorkSpace", html)
+                    # Also remind Tunji
+                    send_email(
+                        settings.ADMIN_EMAIL,
+                        f"⏰ Reminder: Appointment with {a.full_name} in {label}",
+                        f"<p>You have an appointment with <strong>{a.full_name}</strong> ({a.email}) in <strong>{label}</strong>.</p><p>📅 {a.preferred_date} 🕐 {a.preferred_time}</p><p>Purpose: {a.message}</p>"
+                    )
+                    print(f"[REMINDER] Sent {label} reminder for appointment {appointment_id}")
+                except Exception as e:
+                    print(f"[REMINDER EMAIL ERROR] {e}")
+        db.close()
+    except Exception as e:
+        print(f"[REMINDER ERROR] {e}")
+
 @router.delete("/admin/appointments/{aid}")
 def delete_appointment(aid: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     a = db.query(Appointment).filter(Appointment.id==aid).first()
