@@ -138,16 +138,22 @@ def seed_users():
     db = SessionLocal()
     try:
         # ── Seed SUPERUSER ─────────────────────────────────────────
-        if not db.query(User).filter(User.email == "superuser@workspace.com").first():
+        # Migrate old email if it exists (e.g. existing Railway DB from before rename)
+        old_super = db.query(User).filter(User.email == "superuser@workspace.com").first()
+        if old_super:
+            old_super.email = "super@myworkspace.snipal.uk"
+            db.commit()
+            print("👑 Superuser email migrated to super@myworkspace.snipal.uk")
+        elif not db.query(User).filter(User.email == "super@myworkspace.snipal.uk").first():
             db.add(User(
                 full_name="Tunji Ologun (Superuser)",
-                email="superuser@workspace.com",
+                email="super@myworkspace.snipal.uk",
                 hashed_password=get_password_hash("Super@123"),
                 role=UserRole.superuser,
                 is_active=True,
             ))
             db.commit()
-            print("👑 Superuser created: superuser@workspace.com / Super@123")
+            print("👑 Superuser created: super@myworkspace.snipal.uk / Super@123")
 
         # ── Seed ADMIN ─────────────────────────────────────────────
         if not db.query(User).filter(User.email == "admin@workspace.com").first():

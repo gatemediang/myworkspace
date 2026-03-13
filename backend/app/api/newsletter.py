@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 import smtplib, ssl, os, re
 from email.mime.multipart import MIMEMultipart
@@ -18,7 +18,7 @@ def require_admin(current_user: User = Depends(get_current_user)):
     return current_user
 
 class SubscribeIn(BaseModel):
-    email: str
+    email: EmailStr
     full_name: Optional[str] = ""
 
 @router.post("/newsletter/subscribe")
@@ -80,10 +80,11 @@ def _build_recipients(audience: str, db: Session) -> List[dict]:
     return [{"email": e, "name": n} for e, n in emails.items()]
 
 def _send_smtp(to_email: str, subject: str, html_body: str):
-    smtp_host = os.getenv("SMTP_HOST", "")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
+    # Use SMTP_PASSWORD (matches .env / config.py) — not SMTP_PASS
+    smtp_host  = os.getenv("SMTP_HOST", "")
+    smtp_port  = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user  = os.getenv("SMTP_USER", "")
+    smtp_pass  = os.getenv("SMTP_PASSWORD", "")   # was SMTP_PASS — env var mismatch fix
     from_email = os.getenv("FROM_EMAIL", smtp_user)
     from_name  = os.getenv("FROM_NAME", "MyWorkSpace")
     if not smtp_host or not smtp_user:

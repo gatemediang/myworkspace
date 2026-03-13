@@ -249,7 +249,7 @@ Created automatically on first boot — **change both passwords immediately**.
 
 | Role | Email | Password |
 |------|-------|----------|
-| Superuser | `superuser@workspace.com` | `Super@123` |
+| Superuser | `super@myworkspace.snipal.uk` | `Super@123` |
 | Admin | `admin@workspace.com` | `Admin@123` |
 
 ---

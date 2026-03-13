@@ -24,13 +24,16 @@ from app.services.rag_service import (
     chat_with_rag, send_freebie_email, send_freebie_confirm_email, send_purchase_email,
     send_email
 )
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator, constr
+import html as _html
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 router = APIRouter()
 
 # ─── UTILS ────────────────────────────────────────────────────────
-ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "svg"}
+# SVG intentionally excluded — SVG files can contain embedded <script> tags
+# that execute when served directly from /uploads/ and opened in a browser.
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 ALLOWED_DOCUMENT_EXTENSIONS = {"pdf", "zip", "docx", "xlsx", "pptx", "ipynb", "csv"}
 ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_DOCUMENT_EXTENSIONS
 
@@ -75,6 +78,28 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     phone: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one number")
+        return v
+
+    @field_validator("full_name")
+    @classmethod
+    def full_name_length(cls, v: str) -> str:
+        if len(v.strip()) < 2:
+            raise ValueError("Full name must be at least 2 characters")
+        if len(v) > 100:
+            raise ValueError("Full name must not exceed 100 characters")
+        return v.strip()
 
 @router.post("/auth/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
@@ -123,6 +148,18 @@ def get_me(current_user: User = Depends(get_current_active_user)):
 class ChatMessage(BaseModel):
     message: str
     history: List[dict] = []
+
+    @field_validator("message")
+    @classmethod
+    def message_not_empty(cls, v: str) -> str:
+        if len(v) > 2000:
+            raise ValueError("Message must not exceed 2000 characters")
+        return v
+
+    @field_validator("history")
+    @classmethod
+    def history_max_length(cls, v: list) -> list:
+        return v[-20:] if len(v) > 20 else v  # cap history to last 20 turns
 
 @router.post("/chat")
 async def chat(req: ChatMessage, db: Session = Depends(get_db)):
@@ -604,14 +641,22 @@ def get_product(slug: str, db: Session = Depends(get_db)):
     return {"id": p.id, "title": p.title, "slug": p.slug, "description": p.description,
             "price": p.price, "image_url": p.image_url, "category": p.category}
 
+class QuickBuyRequest(BaseModel):
+    product_id: int
+    customer_email: EmailStr
+    customer_name: str
+
+    @field_validator("customer_name")
+    @classmethod
+    def name_length(cls, v: str) -> str:
+        if len(v.strip()) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        return v.strip()
+
 @router.post("/shop/quick-buy")
-async def quick_buy(
-    product_id: int,
-    customer_email: str,
-    customer_name: str,
-    db: Session = Depends(get_db)
-):
+async def quick_buy(req: QuickBuyRequest, db: Session = Depends(get_db)):
     """Buy directly from gallery card without visiting product page."""
+    product_id, customer_email, customer_name = req.product_id, req.customer_email, req.customer_name
     product = db.query(Product).filter(Product.id == product_id, Product.is_active == True).first()
     if not product:
         raise HTTPException(404, "Product not found")
@@ -624,13 +669,19 @@ async def quick_buy(
     db.refresh(order)
     db.add(OrderItem(order_id=order.id, product_id=product.id, price=product.price))
     db.commit()
-    session = stripe.checkout.Session.create(
-        payment_method_types=["card"], line_items=line_items, mode="payment",
-        customer_email=customer_email,
-        success_url=f"{settings.APP_URL}/shop/success?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{settings.APP_URL}/shop",
-        metadata={"order_id": str(order.id), "customer_name": customer_name}
-    )
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"], line_items=line_items, mode="payment",
+            customer_email=customer_email,
+            success_url=f"{settings.APP_URL}/shop/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{settings.APP_URL}/shop",
+            metadata={"order_id": str(order.id), "customer_name": customer_name}
+        )
+    except stripe.error.StripeError as e:
+        # Roll back the pending order if Stripe session creation fails
+        db.delete(order)
+        db.commit()
+        raise HTTPException(502, f"Payment provider error: {str(e)[:100]}")
     order.stripe_session_id = session.id
     db.commit()
     return {"checkout_url": session.url, "session_id": session.id}
@@ -804,6 +855,12 @@ def confirm_freebie_download(token: str, background_tasks: BackgroundTasks, db: 
     record = db.query(FreebieDownload).filter(FreebieDownload.confirm_token == token).first()
     if not record:
         raise HTTPException(404, "Invalid or expired confirmation link")
+    # Tokens expire after 24 hours
+    from datetime import timezone as _tz
+    if record.created_at:
+        age = datetime.now(_tz.utc) - record.created_at.replace(tzinfo=_tz.utc)
+        if age.total_seconds() > 86400 and not record.is_confirmed:
+            raise HTTPException(410, "Confirmation link has expired. Please request a new download link.")
     freebie = db.query(Freebie).filter(Freebie.id == record.freebie_id).first()
     if not freebie:
         raise HTTPException(404, "Freebie not found")
@@ -887,6 +944,22 @@ class ContactRequest(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     message: str
+
+    @field_validator("message")
+    @classmethod
+    def message_length(cls, v: str) -> str:
+        if len(v.strip()) < 5:
+            raise ValueError("Message must be at least 5 characters")
+        if len(v) > 5000:
+            raise ValueError("Message must not exceed 5000 characters")
+        return v.strip()
+
+    @field_validator("full_name")
+    @classmethod
+    def full_name_length(cls, v: str) -> str:
+        if len(v) > 200:
+            raise ValueError("Name must not exceed 200 characters")
+        return v
     preferred_date: Optional[str] = None
     preferred_time: Optional[str] = None
 
@@ -897,24 +970,31 @@ def submit_contact(req: ContactRequest, db: Session = Depends(get_db)):
                          preferred_date=req.preferred_date, preferred_time=req.preferred_time)
     db.add(msg)
     db.commit()
-    # Send email notification to admin
+    # Send email notification to admin — escape all user-supplied values before
+    # embedding in HTML to prevent HTML injection in admin's mail client.
     try:
+        safe_name    = _html.escape(req.full_name)
+        safe_email   = _html.escape(req.email)
+        safe_phone   = _html.escape(req.phone or "—")
+        safe_message = _html.escape(req.message)
+        safe_date    = _html.escape(req.preferred_date or "—")
+        safe_time    = _html.escape(req.preferred_time or "—")
         date_time_line = ""
         if req.preferred_date or req.preferred_time:
-            date_time_line = f"<p><strong>Preferred Date:</strong> {req.preferred_date or '—'} &nbsp; <strong>Time:</strong> {req.preferred_time or '—'}</p>"
+            date_time_line = f"<p><strong>Preferred Date:</strong> {safe_date} &nbsp; <strong>Time:</strong> {safe_time}</p>"
         send_email(
             to_email=settings.ADMIN_EMAIL,
-            subject=f"📩 New Contact Message from {req.full_name}",
+            subject=f"📩 New Contact Message from {safe_name}",
             html_body=f"""
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#020c18;color:#e8f4ff;padding:30px;border-radius:12px;border:1px solid rgba(0,168,98,0.3)">
               <h2 style="color:#00a862;margin-bottom:20px">New Contact Message</h2>
-              <p><strong>Name:</strong> {req.full_name}</p>
-              <p><strong>Email:</strong> {req.email}</p>
-              <p><strong>Phone:</strong> {req.phone or '—'}</p>
+              <p><strong>Name:</strong> {safe_name}</p>
+              <p><strong>Email:</strong> {safe_email}</p>
+              <p><strong>Phone:</strong> {safe_phone}</p>
               {date_time_line}
               <hr style="border-color:rgba(0,168,98,0.2);margin:20px 0"/>
               <p><strong>Message:</strong></p>
-              <p style="background:rgba(0,168,98,0.05);padding:15px;border-radius:8px;border-left:3px solid #00a862">{req.message}</p>
+              <p style="background:rgba(0,168,98,0.05);padding:15px;border-radius:8px;border-left:3px solid #00a862;white-space:pre-wrap">{safe_message}</p>
               <hr style="border-color:rgba(0,168,98,0.2);margin:20px 0"/>
               <p style="font-size:12px;color:#6b7280">Sent from MyWorkSpace Contact Form</p>
             </div>
@@ -1057,7 +1137,13 @@ async def broadcast_newsletter(body: dict, background_tasks: BackgroundTasks,
                 msg["Subject"] = subject
                 msg["From"] = f"MyWorkSpace <{settings.FROM_EMAIL}>"
                 msg["To"] = email
-                unsubscribe_url = f"{settings.APP_URL}/api/newsletter/unsubscribe?email={email}"
+                # Use a HMAC-signed token so anyone knowing only the email address
+                # cannot unsubscribe someone else (IDOR prevention).
+                import hmac, hashlib
+                unsub_token = hmac.new(
+                    settings.SECRET_KEY.encode(), email.encode(), hashlib.sha256
+                ).hexdigest()
+                unsubscribe_url = f"{settings.APP_URL}/api/newsletter/unsubscribe?token={unsub_token}&email={email}"
                 full_html = f"""
 <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:32px;background:#020c18;color:#e2e8f0;border-radius:12px;">
   <div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid rgba(0,168,98,0.3);">
@@ -1230,7 +1316,9 @@ def update_user_role(
 
 @router.put("/admin/users/{id}/toggle-active")
 def toggle_user_active(id: int, db: Session = Depends(get_db),
-                       _: User = Depends(require_admin)):
+                       current_user: User = Depends(require_admin)):
+    if id == current_user.id:
+        raise HTTPException(400, "You cannot deactivate your own account.")
     user = db.query(User).filter(User.id == id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -1573,12 +1661,29 @@ def delete_appointment(aid: int, db: Session = Depends(get_db), _: User = Depend
 # ─── BLOCKED SLOTS (booked appointments) ──────────────────────────
 @router.get("/blocked-slots")
 def get_blocked_slots(db: Session = Depends(get_db)):
-    """Return booked date+time slots so contact form can block them."""
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    """Return only active (pending/confirmed) booked slots so contact form can avoid them.
+    Cancelled and completed appointments are excluded."""
     appts = db.query(Appointment).filter(
         Appointment.preferred_date != None,
-        Appointment.preferred_time != None
+        Appointment.preferred_time != None,
+        Appointment.status.in_(["pending", "confirmed"]),
     ).all()
     return [{"date": a.preferred_date, "time": a.preferred_time}
             for a in appts if a.preferred_date]
+
+# ─── NEWSLETTER UNSUBSCRIBE ────────────────────────────────────────
+@router.get("/newsletter/unsubscribe")
+def newsletter_unsubscribe(email: str, token: str, db: Session = Depends(get_db)):
+    """Token-verified unsubscribe — token is HMAC-SHA256(SECRET_KEY, email).
+    Prevents IDOR: knowing only an email address cannot unsubscribe someone else."""
+    import hmac, hashlib
+    expected = hmac.new(
+        settings.SECRET_KEY.encode(), email.encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, token):
+        raise HTTPException(400, "Invalid unsubscribe link.")
+    sub = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == email).first()
+    if sub:
+        sub.is_confirmed = False
+        db.commit()
+    return RedirectResponse(url=f"{settings.APP_URL}/?unsubscribed=1")
