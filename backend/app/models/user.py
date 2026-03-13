@@ -77,6 +77,7 @@ class Tutorial(Base):
     likes        = relationship("Like",    back_populates="tutorial")
 
 
+# ─── Comment ──────────────────────────────────────────────────────
 class Comment(Base):
     __tablename__ = "comments"
     id          = Column(Integer, primary_key=True, index=True)
@@ -88,6 +89,7 @@ class Comment(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# ─── Like ─────────────────────────────────────────────────────────
 class Like(Base):
     __tablename__ = "likes"
     id          = Column(Integer, primary_key=True, index=True)
@@ -98,6 +100,7 @@ class Like(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# ─── Product (shop item) ──────────────────────────────────────────
 class Product(Base):
     __tablename__ = "products"
     id                = Column(Integer, primary_key=True, index=True)
@@ -118,6 +121,7 @@ class Product(Base):
     order_items       = relationship("OrderItem", back_populates="product")
 
 
+# ─── Order & OrderItem (Stripe checkout records) ──────────────────
 class Order(Base):
     __tablename__ = "orders"
     id                    = Column(Integer, primary_key=True, index=True)
@@ -143,6 +147,7 @@ class OrderItem(Base):
     product    = relationship("Product", back_populates="order_items")
 
 
+# ─── Freebie & FreebieDownload (email-confirmed free downloads) ───
 class Freebie(Base):
     __tablename__ = "freebies"
     id          = Column(Integer, primary_key=True, index=True)
@@ -168,6 +173,7 @@ class FreebieDownload(Base):
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# ─── Appointment (booking via contact form or chatbot) ────────────
 class Appointment(Base):
     __tablename__ = "appointments"
     id             = Column(Integer, primary_key=True, index=True)
@@ -181,6 +187,7 @@ class Appointment(Base):
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# ─── ContactMessage (general contact form submission) ─────────────
 class ContactMessage(Base):
     __tablename__ = "contact_messages"
     id         = Column(Integer, primary_key=True, index=True)
@@ -194,6 +201,7 @@ class ContactMessage(Base):
     preferred_time = Column(String(50),  nullable=True)
 
 
+# ─── SiteSettings (key/value CMS settings store) ──────────────────
 class SiteSettings(Base):
     __tablename__ = "site_settings"
     id         = Column(Integer, primary_key=True, index=True)
@@ -202,6 +210,7 @@ class SiteSettings(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+# ─── AboutMe (single-row profile page content) ────────────────────
 class AboutMe(Base):
     __tablename__ = "about_me"
     id             = Column(Integer, primary_key=True, index=True)
@@ -245,7 +254,9 @@ class HeroSlide(Base):
     __tablename__ = "hero_slides"
     id          = Column(Integer, primary_key=True, index=True)
     image_url   = Column(String(500), nullable=False)
-    caption     = Column(String(300), nullable=True)   # optional overlay caption
+    caption     = Column(String(300), nullable=True)
+    subtitle    = Column(String(300), nullable=True)
+    link_url    = Column(String(500), nullable=True)
     tutorial_id = Column(Integer, ForeignKey("tutorials.id"), nullable=True)
     order_index = Column(Integer, default=0)
     is_active   = Column(Boolean, default=True)
@@ -287,6 +298,7 @@ class Client(Base):
     is_active   = Column(Boolean, default=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
+# ─── FAQ & BotSettings (chatbot quick-replies and system prompt) ───
 class FAQ(Base):
     __tablename__ = "faqs"
     id         = Column(Integer, primary_key=True, index=True)

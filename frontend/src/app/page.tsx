@@ -120,8 +120,8 @@ function HeroSlider({ slides }: { slides: HeroSlide[] }) {
       className="relative overflow-hidden"
       style={{
         borderRadius: '5px',
-        width: 'min(480px, 90vw)',
-        aspectRatio: '1 / 1',
+        width: 'min(750px, 95vw)',
+        aspectRatio: '5 / 3',
         border: '1px solid rgba(0,200,255,0.25)',
         boxShadow: '0 0 40px rgba(0,168,98,0.15)',
       }}

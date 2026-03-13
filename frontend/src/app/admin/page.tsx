@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   LayoutDashboard, FolderOpen, BookOpen, ShoppingBag, Gift,
   MessageSquare, Calendar, Users, Settings, LogOut, Upload,
-  Plus, Trash2, Edit, Eye, Save, X, Image as ImageIcon, Video, Mail, Send, Award, GraduationCap, Download, Bot, MessageSquareMore
+  Plus, Trash2, Edit, Eye, Save, X, Image as ImageIcon, Video, Mail, Send, Award, GraduationCap, Download, Bot, MessageSquareMore, Layers, Link as LinkIcon, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store';
 import RichEditor from '@/components/ui/RichEditor';
@@ -13,7 +13,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 
-type Section = 'dashboard' | 'projects' | 'tutorials' | 'products' | 'freebies' | 'contacts' | 'appointments' | 'users' | 'about' | 'newsletter' | 'certifications' | 'education' | 'clientele' | 'chatbot';
+type Section = 'dashboard' | 'projects' | 'tutorials' | 'products' | 'freebies' | 'contacts' | 'appointments' | 'users' | 'about' | 'newsletter' | 'certifications' | 'education' | 'clientele' | 'chatbot' | 'hero';
 
 const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,6 +29,8 @@ const NAV = [
   { key: 'certifications', label: 'Certifications', icon: Award },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'clientele', label: 'Clientele', icon: Users },
+  { key: 'hero', label: 'Hero Slides', icon: Layers },
+  { key: 'chatbot', label: 'Chatbot', icon: Bot },
 ];
 
 const PROJECT_CATS = ['ai_ml', 'data_analysis', 'ai_automations', 'fullstack'];
@@ -73,6 +75,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!user) return;
+    setShowForm(false);
     if (section === 'dashboard') {
       api.get('/admin/stats').then(r => setStats(r.data)).catch(() => {});
     } else {
@@ -298,7 +301,31 @@ export default function AdminPage() {
                     </div>
                     <div className="text-right text-xs text-[var(--text-secondary)] flex flex-col items-end gap-2">
                       {new Date(item.created_at).toLocaleDateString()}
-                      {item.status && <div className="badge badge-green">{item.status}</div>}
+                      {section === 'appointments' && item.status && (
+                        <select
+                          value={item.status}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            try {
+                              await api.patch(`/admin/appointments/${item.id}/status`, { status: newStatus });
+                              setData((prev: any[]) => prev.map((d: any) => d.id === item.id ? { ...d, status: newStatus } : d));
+                            } catch(err) {
+                              alert('Failed to update status. Please try again.');
+                            }
+                          }}
+                          className="text-xs rounded-lg px-2 py-1 font-bold border-0 cursor-pointer"
+                          style={{
+                            background: item.status === 'confirmed' ? '#00a862' : item.status === 'cancelled' ? '#ef4444' : item.status === 'completed' ? '#6b7280' : '#d97706',
+                            color: 'white'
+                          }}
+                        >
+                          <option value="pending">PENDING</option>
+                          <option value="confirmed">CONFIRMED</option>
+                          <option value="cancelled">CANCELLED</option>
+                          <option value="completed">COMPLETED</option>
+                        </select>
+                      )}
+                      {section !== 'appointments' && item.status && <div className="badge badge-green">{item.status}</div>}
                       <button onClick={async () => {
                         if (!confirm("Delete this message?")) return;
                         const ep = section === "contacts" ? `/admin/contacts/${item.id}` : `/admin/appointments/${item.id}`;
@@ -315,6 +342,9 @@ export default function AdminPage() {
           </div>
         )}
 
+
+        {/* HERO SLIDES */}
+        {section === 'hero' && <HeroSlidesAdmin apiBase={process.env.NEXT_PUBLIC_API_URL || ''} />}
 
         {/* CHATBOT */}
         {section === 'chatbot' && <ChatbotAdmin apiBase={process.env.NEXT_PUBLIC_API_URL || ''} />}
@@ -434,6 +464,7 @@ export default function AdminPage() {
                   <input required value={formData.title || ''} onChange={e => setFormData((p: any) => ({ ...p, title: e.target.value }))} className="form-input" />
                 </div>
 
+                {/* ── FORM: projects ── */}
                 {section === 'projects' && (
                   <>
                     <div>
@@ -481,6 +512,7 @@ export default function AdminPage() {
                   </>
                 )}
 
+                {/* ── FORM: tutorials (blog posts) ── */}
                 {section === 'tutorials' && ( // Blog posts
                   <>
                     <div>
@@ -525,6 +557,7 @@ export default function AdminPage() {
                   </>
                 )}
 
+                {/* ── FORM: products (shop items with Stripe) ── */}
                 {section === 'products' && (
                   <>
                     <div>
@@ -558,6 +591,7 @@ export default function AdminPage() {
                   </>
                 )}
 
+                {/* ── FORM: freebies (free download items, email-confirmed) ── */}
                 {section === 'freebies' && (
                   <>
                     <div>
@@ -974,6 +1008,280 @@ function ClienteleAdmin({ data, onRefresh }: { data: any[], onRefresh: () => voi
 }
 
 // ═══════════════════════════════════════════════════════
+// HERO SLIDES ADMIN
+// ═══════════════════════════════════════════════════════
+function HeroSlidesAdmin({ apiBase }: { apiBase: string }) {
+  const [slides, setSlides] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editSlide, setEditSlide] = useState<any>(null);
+  const [caption, setCaption] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [orderIndex, setOrderIndex] = useState(0);
+  const [isActive, setIsActive] = useState(true);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { loadSlides(); }, []);
+
+  const loadSlides = async () => {
+    try {
+      const res = await api.get('/admin/hero-slides');
+      setSlides(res.data || []);
+    } catch { setSlides([]); }
+  };
+
+  const openForm = (slide?: any) => {
+    setEditSlide(slide || null);
+    setCaption(slide?.caption || '');
+    setSubtitle(slide?.subtitle || '');
+    setLinkUrl(slide?.link_url || '');
+    setOrderIndex(slide?.order_index ?? slides.length);
+    setIsActive(slide ? slide.is_active : true);
+    setImageFile(null);
+    setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!editSlide && !imageFile) { toast.error('Please select an image.'); return; }
+    setSaving(true);
+    const fd = new FormData();
+    fd.append('caption', caption);
+    fd.append('subtitle', subtitle);
+    fd.append('link_url', linkUrl);
+    fd.append('order_index', String(orderIndex));
+    fd.append('is_active', String(isActive));
+    if (imageFile) fd.append('image', imageFile);
+    try {
+      if (editSlide) {
+        await api.put(`/admin/hero-slides/${editSlide.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Slide updated!');
+      } else {
+        await api.post('/admin/hero-slides', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Slide created!');
+      }
+      setShowForm(false);
+      loadSlides();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Failed to save slide.');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this slide?')) return;
+    try {
+      await api.delete(`/admin/hero-slides/${id}`);
+      toast.success('Slide deleted.');
+      loadSlides();
+    } catch { toast.error('Failed to delete.'); }
+  };
+
+  const toggleActive = async (slide: any) => {
+    const fd = new FormData();
+    fd.append('caption', slide.caption || '');
+    fd.append('subtitle', slide.subtitle || '');
+    fd.append('link_url', slide.link_url || '');
+    fd.append('order_index', String(slide.order_index));
+    fd.append('is_active', String(!slide.is_active));
+    try {
+      await api.put(`/admin/hero-slides/${slide.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      loadSlides();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Failed to update.');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {slides.filter(s => s.is_active).length}/5 active slides
+          </p>
+        </div>
+        <button type="button" onClick={() => openForm()} className="btn-primary text-sm py-2 px-4">
+          <Plus size={14} /> Add Slide
+        </button>
+      </div>
+
+      {/* Slide list */}
+      <div className="space-y-4">
+        {slides.length === 0 && (
+          <div className="glass-card p-10 text-center rounded-xl">
+            <ImageIcon size={40} style={{ color: 'var(--text-secondary)' }} className="mx-auto mb-3" />
+            <p className="text-[var(--text-secondary)]">No slides yet. Add your first hero image.</p>
+          </div>
+        )}
+        {slides.map(slide => (
+          <div key={slide.id} className="glass-card rounded-xl overflow-hidden" style={{ border: `1px solid ${slide.is_active ? 'rgba(0,168,98,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
+            <div className="flex items-stretch gap-0">
+              {/* Thumbnail */}
+              <div className="w-40 flex-shrink-0 relative" style={{ minHeight: '100px' }}>
+                <img
+                  src={`${apiBase}${slide.image_url}`}
+                  alt={slide.caption || 'Slide'}
+                  className="w-full h-full object-cover"
+                  style={{ minHeight: '100px' }}
+                />
+                {!slide.is_active && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <span className="text-xs font-bold text-white/60 uppercase tracking-wider">Inactive</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    {slide.caption && (
+                      <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{slide.caption}</p>
+                    )}
+                    {slide.subtitle && (
+                      <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>{slide.subtitle}</p>
+                    )}
+                    {slide.link_url && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <LinkIcon size={11} style={{ color: 'var(--cyan)' }} />
+                        <p className="text-xs truncate" style={{ color: 'var(--cyan)' }}>{slide.link_url}</p>
+                      </div>
+                    )}
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Order: {slide.order_index}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Active toggle */}
+                    <button
+                      type="button"
+                      onClick={() => toggleActive(slide)}
+                      title={slide.is_active ? 'Deactivate' : 'Activate'}
+                      style={{ color: slide.is_active ? 'var(--green)' : 'var(--text-secondary)' }}
+                      className="hover:opacity-70 transition-opacity"
+                    >
+                      {slide.is_active ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                    </button>
+                    <button type="button" onClick={() => openForm(slide)} className="text-[var(--cyan)] hover:opacity-70">
+                      <Edit size={15} />
+                    </button>
+                    <button type="button" onClick={() => handleDelete(slide.id)} className="text-red-400 hover:opacity-70">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add / Edit Modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }}>
+          <div className="glass-card p-6 rounded-2xl w-full max-w-lg overflow-y-auto" style={{ border: '1px solid rgba(0,168,98,0.3)', maxHeight: '90vh' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-bold text-lg" style={{ color: 'var(--green)', fontFamily: 'Orbitron' }}>
+                {editSlide ? 'Edit Slide' : 'Add Slide'}
+              </h3>
+              <button type="button" onClick={() => setShowForm(false)}><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Image */}
+              <div>
+                <label className="form-label">
+                  {editSlide ? 'Replace Image (leave blank to keep current)' : 'Image *'}
+                </label>
+                {editSlide && (
+                  <img src={`${apiBase}${editSlide.image_url}`} alt="current" className="w-full h-32 object-cover rounded-lg mb-2" />
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => {
+                    const file = e.target.files && e.target.files.length > 0 ? e.target.files[0] : null;
+                    setImageFile(file);
+                  }}
+                  className="form-input"
+                />
+                {imageFile && <p className="text-xs mt-1" style={{ color: 'var(--green)' }}>Selected: {imageFile.name}</p>}
+              </div>
+
+              {/* Heading */}
+              <div>
+                <label className="form-label">Heading / Caption</label>
+                <input
+                  value={caption}
+                  onChange={e => setCaption(e.target.value)}
+                  className="form-input"
+                  placeholder="e.g. AI & Data Science Expert"
+                />
+              </div>
+
+              {/* Subtitle */}
+              <div>
+                <label className="form-label">Subtitle</label>
+                <input
+                  value={subtitle}
+                  onChange={e => setSubtitle(e.target.value)}
+                  className="form-input"
+                  placeholder="e.g. Explore my latest projects and tutorials"
+                />
+              </div>
+
+              {/* Link URL */}
+              <div>
+                <label className="form-label">
+                  <LinkIcon size={12} className="inline mr-1" />
+                  Link URL <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(clicking the slide goes here)</span>
+                </label>
+                <input
+                  value={linkUrl}
+                  onChange={e => setLinkUrl(e.target.value)}
+                  className="form-input"
+                  placeholder="e.g. /projects  or  https://..."
+                />
+              </div>
+
+              {/* Order & Active */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Display Order</label>
+                  <input
+                    type="number"
+                    value={orderIndex}
+                    onChange={e => setOrderIndex(Number(e.target.value))}
+                    className="form-input"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Active</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsActive(v => !v)}
+                    className="flex items-center gap-2 mt-1"
+                    style={{ color: isActive ? 'var(--green)' : 'var(--text-secondary)' }}
+                  >
+                    {isActive ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                    <span className="text-sm">{isActive ? 'Visible' : 'Hidden'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">Cancel</button>
+              <button type="button" onClick={handleSubmit} disabled={saving} className="btn-primary flex-1">
+                {saving ? 'Saving...' : <><Save size={14} /> {editSlide ? 'Update' : 'Create'}</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // CHATBOT ADMIN
 // ═══════════════════════════════════════════════════════
 function ChatbotAdmin({ apiBase }: { apiBase: string }) {
@@ -989,7 +1297,6 @@ function ChatbotAdmin({ apiBase }: { apiBase: string }) {
   const [saving, setSaving] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
 
   useEffect(() => {
     loadFaqs();
@@ -998,26 +1305,23 @@ function ChatbotAdmin({ apiBase }: { apiBase: string }) {
   }, []);
 
   const loadFaqs = async () => {
-    const res = await fetch(`${apiBase}/api/faqs`);
-    const data = await res.json();
-    setFaqs(data);
+    try {
+      const res = await api.get('/faqs');
+      setFaqs(res.data || []);
+    } catch { setFaqs([]); }
   };
 
   const loadBotSettings = async () => {
     try {
-      const res = await fetch(`${apiBase}/api/admin/bot-settings`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setSystemPrompt(data.system_prompt || defaultPrompt);
+      const res = await api.get('/admin/bot-settings');
+      setSystemPrompt(res.data.system_prompt || defaultPrompt);
     } catch { setSystemPrompt(defaultPrompt); }
   };
 
   const loadPhoto = async () => {
     try {
-      const res = await fetch(`${apiBase}/api/site-settings/chatbot_photo`);
-      const data = await res.json();
-      if (data.value) setPhotoUrl(data.value);
+      const res = await api.get('/site-settings/chatbot_photo');
+      if (res.data?.value) setPhotoUrl(res.data.value);
     } catch {}
   };
 
@@ -1042,7 +1346,7 @@ Keep responses concise. Do not print the entire website — only answer what is 
   };
 
   const handleFaqSubmit = async () => {
-    if (!question || !answer) return;
+    if (!question) { toast.error('Question is required.'); return; }
     setSaving(true);
     const fd = new FormData();
     fd.append('question', question);
@@ -1050,18 +1354,24 @@ Keep responses concise. Do not print the entire website — only answer what is 
     fd.append('order_index', String(orderIndex));
     try {
       if (editFaq) {
-        await fetch(`${apiBase}/api/admin/faqs/${editFaq.id}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: fd });
+        await api.put(`/admin/faqs/${editFaq.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('FAQ updated!');
       } else {
-        await fetch(`${apiBase}/api/admin/faqs`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+        await api.post('/admin/faqs', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('FAQ added!');
       }
       setShowForm(false); loadFaqs();
-    } finally { setSaving(false); }
+    } catch { toast.error('Failed to save FAQ.'); }
+    finally { setSaving(false); }
   };
 
   const handleDeleteFaq = async (id: number) => {
     if (!confirm('Delete this FAQ?')) return;
-    await fetch(`${apiBase}/api/admin/faqs/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-    loadFaqs();
+    try {
+      await api.delete(`/admin/faqs/${id}`);
+      toast.success('FAQ deleted.');
+      loadFaqs();
+    } catch { toast.error('Failed to delete FAQ.'); }
   };
 
   const handleSavePrompt = async () => {
@@ -1069,24 +1379,23 @@ Keep responses concise. Do not print the entire website — only answer what is 
     const fd = new FormData();
     fd.append('system_prompt', systemPrompt);
     try {
-      await fetch(`${apiBase}/api/admin/bot-settings`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: fd });
-      alert('✅ Bot prompt saved!');
-    } finally { setSavingPrompt(false); }
+      await api.put('/admin/bot-settings', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      toast.success('Bot prompt saved!');
+    } catch { toast.error('Failed to save prompt.'); }
+    finally { setSavingPrompt(false); }
   };
 
   const handlePhotoUpload = async () => {
-    if (!photoFile) return;
+    if (!photoFile) { toast.error('Please select a photo first.'); return; }
     setSavingPhoto(true);
     const fd = new FormData();
     fd.append('photo', photoFile);
     try {
-      const res = await fetch(`${apiBase}/api/admin/site-settings/chatbot_photo/upload`, {
-        method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: fd
-      });
-      const data = await res.json();
-      if (data.url) setPhotoUrl(data.url);
-      alert('✅ Photo uploaded!');
-    } finally { setSavingPhoto(false); }
+      const res = await api.put('/admin/site-settings/chatbot_photo/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      if (res.data.url) setPhotoUrl(res.data.url);
+      toast.success('Photo uploaded!');
+    } catch { toast.error('Photo upload failed. Please try again.'); }
+    finally { setSavingPhoto(false); }
   };
 
   return (
@@ -1099,8 +1408,17 @@ Keep responses concise. Do not print the entire website — only answer what is 
             {photoUrl ? <img src={`${apiBase}${photoUrl}`} alt="Bot" className="w-full h-full object-cover" /> : <Bot size={36} style={{ color: 'var(--cyan)' }} />}
           </div>
           <div className="flex-1">
-            <input type="file" accept="image/*" onChange={e => setPhotoFile(e.target.files?.[0] || null)} className="form-input mb-2" />
-            <button onClick={handlePhotoUpload} disabled={!photoFile || savingPhoto} className="btn-primary text-sm py-2 px-4">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => {
+                const file = e.target.files && e.target.files.length > 0 ? e.target.files[0] : null;
+                setPhotoFile(file);
+              }}
+              className="form-input mb-2"
+            />
+            {photoFile && <p className="text-xs mb-2" style={{ color: 'var(--green)' }}>Selected: {photoFile.name}</p>}
+            <button type="button" onClick={handlePhotoUpload} disabled={savingPhoto} className="btn-primary text-sm py-2 px-4">
               {savingPhoto ? 'Uploading...' : 'Upload Photo'}
             </button>
           </div>
@@ -1159,8 +1477,11 @@ Keep responses concise. Do not print the entire website — only answer what is 
             <div className="space-y-3">
               <div><label className="form-label">Question</label>
                 <input value={question} onChange={e => setQuestion(e.target.value)} className="form-input" placeholder="e.g. What services do you offer?" /></div>
-              <div><label className="form-label">Answer</label>
-                <textarea value={answer} onChange={e => setAnswer(e.target.value)} rows={4} className="form-input resize-none" placeholder="Short answer shown in chat..." /></div>
+              <div>
+                <label className="form-label">Bot Hint <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(optional — bot answers using AI)</span></label>
+                <textarea value={answer} onChange={e => setAnswer(e.target.value)} rows={3} className="form-input resize-none" placeholder="e.g. Talk about the data analysis projects and link to /projects" />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>The bot figures out its own answer. Use this to guide it if needed.</p>
+              </div>
               <div><label className="form-label">Display Order</label>
                 <input type="number" value={orderIndex} onChange={e => setOrderIndex(Number(e.target.value))} className="form-input" /></div>
             </div>

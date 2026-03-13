@@ -63,6 +63,7 @@ export default function ChatBot() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Send user message → API → append bot response; handle appointment booking signal
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
     const userMsg: Message = { role: 'user', content: text };
@@ -167,7 +168,7 @@ export default function ChatBot() {
           {messages.length <= 1 && (
             <div className="px-4 py-2 border-b border-[rgba(0,200,255,0.1)]">
               <div className="glass-card p-3 rounded-xl" style={{ border: '1px solid rgba(0,200,255,0.2)' }}>
-                {QUICK_PROMPTS.map((p, i) => (
+                {(faqs.length > 0 ? faqs.map(f => f.question) : QUICK_PROMPTS).map((p, i) => (
                   <button key={i} onClick={() => sendMessage(p)}
                     className="block w-full text-left text-sm text-[var(--text-secondary)] hover:text-[var(--cyan)] py-1 transition-colors">
                     {p}
