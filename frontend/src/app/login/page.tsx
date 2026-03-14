@@ -198,6 +198,14 @@ export default function LoginPage() {
               </div>
             )}
 
+            {mode === 'login' && (
+              <div className="text-right -mt-1">
+                <Link href="/forgot-password" className="text-xs text-[var(--green)] hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
             <button type="submit" disabled={isLoading} className="btn-primary w-full justify-center mt-2">
               {isLoading
                 ? <><span className="spinner w-4 h-4 border-2 mr-2"></span>Processing...</>

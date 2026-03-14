@@ -111,6 +111,8 @@ def run_migrations():
         # to link to an external/internal URL and carry a subtitle line.
         db.execute(text("ALTER TABLE hero_slides ADD COLUMN IF NOT EXISTS link_url VARCHAR(500)"))
         db.execute(text("ALTER TABLE hero_slides ADD COLUMN IF NOT EXISTS subtitle VARCHAR(300)"))
+        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)"))
+        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ"))
         db.commit()
     except Exception as e:
         print(f"Migration note: {e}")

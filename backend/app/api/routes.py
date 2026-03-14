@@ -136,6 +136,61 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
                  "full_name": user.full_name, "avatar_url": user.avatar_url}
     }
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    def password_strength(cls, v: str) -> str:
+        import re
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("Password must contain a number")
+        return v
+
+@router.post("/auth/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    from datetime import timezone
+    user = db.query(User).filter(User.email == req.email).first()
+    # Always return success to prevent email enumeration
+    if not user:
+        return {"message": "If that email exists, a reset link has been sent."}
+    token = secrets.token_urlsafe(32)
+    user.reset_token = token
+    user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    db.commit()
+    reset_url = f"{settings.APP_URL}/reset-password?token={token}"
+    html = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#040f1e;color:#e8f4ff;border-radius:12px;border:1px solid rgba(0,168,98,0.3)">
+      <h2 style="color:#00a862;font-size:1.4rem;margin-bottom:8px">Password Reset</h2>
+      <p style="color:#94a3b8;margin-bottom:24px">Click the button below to reset your password. This link expires in <strong>1 hour</strong>.</p>
+      <a href="{reset_url}" style="display:inline-block;background:#00a862;color:#000;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:1rem">Reset Password</a>
+      <p style="color:#64748b;font-size:0.8rem;margin-top:24px">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    """
+    send_email(user.email, "Reset your MyWorkSpace password", html)
+    return {"message": "If that email exists, a reset link has been sent."}
+
+@router.post("/auth/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    from datetime import timezone
+    user = db.query(User).filter(User.reset_token == req.token).first()
+    if not user or not user.reset_token_expires:
+        raise HTTPException(400, "Invalid or expired reset link.")
+    if datetime.now(timezone.utc) > user.reset_token_expires.replace(tzinfo=timezone.utc):
+        raise HTTPException(400, "Reset link has expired. Please request a new one.")
+    user.hashed_password = get_password_hash(req.new_password)
+    user.reset_token = None
+    user.reset_token_expires = None
+    db.commit()
+    return {"message": "Password updated successfully. You can now log in."}
+
 @router.get("/auth/me")
 def get_me(current_user: User = Depends(get_current_active_user)):
     return {
