@@ -6,7 +6,7 @@ import { ArrowRight, ChevronDown, Github, ExternalLink, Mail, Phone, User, Users
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const CATEGORIES = [
@@ -110,7 +110,7 @@ function HeroSlider({ slides }: { slides: HeroSlide[] }) {
   }, [current, next, list.length]);
 
   const slide = list[current];
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const apiBase = getBackendUrl();
   const imgSrc = slide.image_url.startsWith('/uploads')
     ? `${apiBase}${slide.image_url}`
     : slide.image_url;
@@ -369,7 +369,7 @@ export default function HomePage() {
                   {project.image_url && (
                     <div className="relative h-48 overflow-hidden">
                       <img
-                        src={`${process.env.NEXT_PUBLIC_API_URL}${project.image_url}`}
+                        src={`${getBackendUrl()}${project.image_url}`}
                         alt={project.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
@@ -535,7 +535,7 @@ export default function HomePage() {
                   <div className="flex-1 flex items-center justify-center p-4"
                     style={{ background: 'rgba(255,255,255,0.03)' }}>
                     {client.logo_url ? (
-                      <img src={`${process.env.NEXT_PUBLIC_API_URL}${client.logo_url}`}
+                      <img src={`${getBackendUrl()}${client.logo_url}`}
                         alt={client.name} className="object-contain"
                         style={{ maxWidth: '160px', maxHeight: '130px', filter: 'brightness(0.9) saturate(0.75)' }} />
                     ) : (

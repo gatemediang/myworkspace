@@ -6,7 +6,7 @@ import { ArrowLeft, Eye, Heart, MessageCircle, Send, Calendar } from 'lucide-rea
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
@@ -14,7 +14,6 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function TutorialDetail() {
   const { slug } = useParams();
@@ -78,7 +77,7 @@ export default function TutorialDetail() {
         <section style={{ position: 'relative', minHeight: '55vh', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
           {tutorial.image_url ? (
             <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-              <img src={`${API}${tutorial.image_url}`} alt={tutorial.title}
+              <img src={`${getBackendUrl()}${tutorial.image_url}`} alt={tutorial.title}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #020c18 35%, rgba(2,12,24,0.6) 70%, rgba(2,12,24,0.2) 100%)' }} />
             </div>

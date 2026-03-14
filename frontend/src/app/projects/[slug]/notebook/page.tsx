@@ -96,7 +96,7 @@ export default function NotebookViewer() {
   const [notebookUrl, setNotebookUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const API = process.env.NEXT_PUBLIC_API_URL || '';
+  const API = typeof window !== 'undefined' ? (document.querySelector('meta[name="backend-url"]')?.getAttribute('content') || '') : '';
 
   useEffect(() => {
     if (!slug) return;

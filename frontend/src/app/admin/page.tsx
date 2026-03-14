@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store';
 import RichEditor from '@/components/ui/RichEditor';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 
@@ -262,7 +262,7 @@ export default function AdminPage() {
               ) : data.map((item: any) => (
                 <div key={item.id} onClick={() => openForm(item)} className="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer" style={{overflow:"hidden", border:"1px solid rgba(0,200,255,0.12)", transition:"border-color 0.2s"}} onMouseEnter={e=>(e.currentTarget.style.borderColor="var(--green)")} onMouseLeave={e=>(e.currentTarget.style.borderColor="rgba(0,200,255,0.12)")}>
                   {item.image_url && (
-                    <img src={`${process.env.NEXT_PUBLIC_API_URL}${item.image_url}`} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+                    <img src={`${getBackendUrl()}${item.image_url}`} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
                   )}
                   <div style={{flex:1, minWidth:0, overflow:"hidden"}}>
                     <p className="font-bold text-[var(--text-primary)]" style={{overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{item.title || item.name}</p>
@@ -344,10 +344,10 @@ export default function AdminPage() {
 
 
         {/* HERO SLIDES */}
-        {section === 'hero' && <HeroSlidesAdmin apiBase={process.env.NEXT_PUBLIC_API_URL || ''} />}
+        {section === 'hero' && <HeroSlidesAdmin apiBase={getBackendUrl()} />}
 
         {/* CHATBOT */}
-        {section === 'chatbot' && <ChatbotAdmin apiBase={process.env.NEXT_PUBLIC_API_URL || ''} />}
+        {section === 'chatbot' && <ChatbotAdmin apiBase={getBackendUrl()} />}
         {/* USERS */}
         {section === 'users' && (['admin','superuser'].includes(user.role as string)) && (
           <div className="space-y-3">
@@ -407,7 +407,7 @@ export default function AdminPage() {
             <div>
               <label className="form-label">Profile Photo</label>
               <div className="flex items-center gap-4">
-                {formData.photo_url && <img src={`${process.env.NEXT_PUBLIC_API_URL}${formData.photo_url}`} alt="Profile" className="w-20 h-20 rounded-xl object-cover" />}
+                {formData.photo_url && <img src={`${getBackendUrl()}${formData.photo_url}`} alt="Profile" className="w-20 h-20 rounded-xl object-cover" />}
                 <input type="file" accept="image/*" onChange={e => setFileInputs((p: any) => ({ ...p, photo: e.target.files?.[0] }))} className="form-input" />
               </div>
             </div>
@@ -415,7 +415,7 @@ export default function AdminPage() {
               <label className="form-label">CV / Resume (PDF)</label>
               <div className="flex items-center gap-4">
                 {formData.cv_url && (
-                  <a href={`${process.env.NEXT_PUBLIC_API_URL}${formData.cv_url}`}
+                  <a href={`${getBackendUrl()}${formData.cv_url}`}
                     target="_blank" rel="noopener noreferrer"
                     className="text-xs text-[var(--green)] underline flex items-center gap-1">
                     <Download size={12} /> Current CV
@@ -620,7 +620,7 @@ export default function AdminPage() {
                     <input type="file" accept="image/*" onChange={e => setFileInputs((p: any) => ({ ...p, image: e.target.files?.[0] }))} className="form-input" />
                     {editItem?.image_url && (
                       <div className="flex items-center gap-3 mt-2">
-                        <img src={`${process.env.NEXT_PUBLIC_API_URL}${editItem.image_url}`} alt="" className="w-24 h-16 rounded-lg object-cover" />
+                        <img src={`${getBackendUrl()}${editItem.image_url}`} alt="" className="w-24 h-16 rounded-lg object-cover" />
                         <button type="button" onClick={() => clearFile('image_url')}
                           className="text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors flex items-center gap-1">
                           <Trash2 size={11} /> Remove
@@ -774,7 +774,7 @@ function CertificationsAdmin({ data, onRefresh }: { data: any[], onRefresh: () =
   const [orderIndex, setOrderIndex] = useState(0);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const apiBase = getBackendUrl();
 
   const openForm = (item?: any) => {
     setEditItem(item || null); setName(item?.name || '');
@@ -858,7 +858,7 @@ function EducationAdmin({ data, onRefresh }: { data: any[], onRefresh: () => voi
   const [orderIndex, setOrderIndex] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const apiBase = getBackendUrl();
 
   const openForm = (item?: any) => {
     setEditItem(item || null); setSchoolName(item?.school_name || '');
@@ -942,7 +942,7 @@ function ClienteleAdmin({ data, onRefresh }: { data: any[], onRefresh: () => voi
   const [orderIndex, setOrderIndex] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const apiBase = getBackendUrl();
 
   const openForm = (item?: any) => {
     setEditItem(item || null); setName(item?.name || '');

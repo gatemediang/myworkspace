@@ -4,7 +4,7 @@ import { ShoppingCart, Download, Tag } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 export default function ShopPage() {
@@ -71,7 +71,7 @@ export default function ShopPage() {
                 <div key={p.id} className="glass-card rounded-xl overflow-hidden flex flex-col md:flex-row">
                   {p.image_url && (
                     <div className="w-full md:w-32 h-32 flex-shrink-0">
-                      <img src={`${process.env.NEXT_PUBLIC_API_URL}${p.image_url}`} alt={p.title} className="w-full h-full object-cover" />
+                      <img src={`${getBackendUrl()}${p.image_url}`} alt={p.title} className="w-full h-full object-cover" />
                     </div>
                   )}
                   <div className="flex-1 p-5 flex flex-col md:flex-row items-start md:items-center gap-4">

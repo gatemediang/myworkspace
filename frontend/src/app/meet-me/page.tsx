@@ -4,7 +4,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
 import { Download, Award, GraduationCap, Users } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const DEFAULT_ABOUT = {
@@ -86,7 +86,7 @@ export default function MeetMePage() {
   const [certifications, setCertifications] = useState<any[]>([]);
   const [education, setEducation] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const apiBase = getBackendUrl();
 
   useEffect(() => {
     api.get('/about').then(res => { if (res.data?.name) setAbout({ ...DEFAULT_ABOUT, ...res.data }); }).catch(() => toast.error('Failed to load profile.'));

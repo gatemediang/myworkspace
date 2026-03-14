@@ -5,11 +5,10 @@ import { Eye, Heart, MessageCircle, Calendar, ArrowRight, FolderOpen } from 'luc
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const CATS = ['All', 'Python', 'AI/ML', 'Data Science', 'Web Dev', 'DevOps', 'Projects'];
-const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function BlogPage() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -67,7 +66,7 @@ export default function BlogPage() {
                 <div key={`${t._type}-${t.id}`} className="glass-card rounded-xl overflow-hidden flex flex-col md:flex-row">
                   {t.image_url && (
                     <div className="w-full md:w-48 h-40 md:h-auto flex-shrink-0">
-                      <img src={`${API}${t.image_url}`} alt={t.title} className="w-full h-full object-cover" />
+                      <img src={`${getBackendUrl()}${t.image_url}`} alt={t.title} className="w-full h-full object-cover" />
                     </div>
                   )}
                   <div className="flex-1 p-6 flex flex-col justify-between">

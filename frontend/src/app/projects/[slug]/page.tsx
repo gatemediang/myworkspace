@@ -10,7 +10,7 @@ export default function ProjectPage() {
   const router = useRouter();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const API = process.env.NEXT_PUBLIC_API_URL || '';
+  const API = typeof window !== 'undefined' ? (document.querySelector('meta[name="backend-url"]')?.getAttribute('content') || '') : '';
 
   useEffect(() => {
     if (!slug) return;

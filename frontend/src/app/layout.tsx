@@ -8,10 +8,15 @@ export const metadata: Metadata = {
   keywords: 'AI, ML, Machine Learning, Data Analysis, Full Stack, Portfolio',
 };
 
+// Server component — can read env vars at runtime (no baking needed)
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Runtime backend URL — read by api.ts on the client */}
+        <meta name="backend-url" content={BACKEND_URL} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet" />

@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot } from 'lucide-react';
 import Image from 'next/image';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 
 interface Message {
@@ -105,7 +105,7 @@ export default function ChatBot() {
     >
       {chatbotPhoto ? (
         <Image
-          src={chatbotPhoto.startsWith('/uploads') ? `${process.env.NEXT_PUBLIC_API_URL}${chatbotPhoto}` : chatbotPhoto}
+          src={chatbotPhoto.startsWith('/uploads') ? `${getBackendUrl()}${chatbotPhoto}` : chatbotPhoto}
           alt="AI Assistant"
           width={size} height={size}
           className="object-cover w-full h-full"

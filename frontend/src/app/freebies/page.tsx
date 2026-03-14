@@ -4,7 +4,7 @@ import { Download, Gift } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 export default function FreebiesPage() {
@@ -59,7 +59,7 @@ export default function FreebiesPage() {
                 <div key={f.id} className="glass-card rounded-xl overflow-hidden flex flex-col">
                   {f.image_url ? (
                     <div className="h-44 overflow-hidden">
-                      <img src={`${process.env.NEXT_PUBLIC_API_URL}${f.image_url}`} alt={f.title} className="w-full h-full object-cover" />
+                      <img src={`${getBackendUrl()}${f.image_url}`} alt={f.title} className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <div className="h-44 flex items-center justify-center" style={{ background: 'rgba(0,168,98,0.08)' }}>

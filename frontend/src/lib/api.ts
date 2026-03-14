@@ -1,13 +1,22 @@
 import axios from 'axios';
 
-const API_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+// Reads the backend URL injected by layout.tsx at runtime.
+// Falls back to env var in SSR or empty string if meta tag is missing.
+export function getBackendUrl(): string {
+  if (typeof window === 'undefined') return process.env.BACKEND_URL || 'http://localhost:8000';
+  const meta = document.querySelector('meta[name="backend-url"]');
+  return meta?.getAttribute('content') || '';
+}
+
+export const API_URL = getBackendUrl();
 
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
+  // Resolve backend URL lazily so it's always current
+  config.baseURL = `${getBackendUrl()}/api`;
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('ws_token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
