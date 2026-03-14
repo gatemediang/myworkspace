@@ -1687,3 +1687,31 @@ def newsletter_unsubscribe(email: str, token: str, db: Session = Depends(get_db)
         sub.is_confirmed = False
         db.commit()
     return RedirectResponse(url=f"{settings.APP_URL}/?unsubscribed=1")
+
+# ─── TEMPORARY: BULK UPLOAD RESTORE ──────────────────────────────
+# Used once to migrate local uploads/ to Railway volume.
+# DELETE this endpoint after migration is complete.
+@router.post("/admin/restore-uploads")
+async def restore_uploads(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_superuser),
+):
+    """Accept a .tar.gz of the uploads directory and extract it into UPLOAD_DIR."""
+    import tarfile, tempfile, io
+    if not file.filename.endswith((".tar.gz", ".tgz")):
+        raise HTTPException(400, "Must be a .tar.gz file")
+    content = await file.read()
+    with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as tar:
+        for member in tar.getmembers():
+            # Security: strip any leading path components to prevent path traversal
+            member.name = os.path.normpath(member.name).lstrip("/")
+            if ".." in member.name:
+                continue
+            dest = os.path.join(settings.UPLOAD_DIR, member.name)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            if member.isfile():
+                f = tar.extractfile(member)
+                if f:
+                    with open(dest, "wb") as out:
+                        out.write(f.read())
+    return {"status": "ok", "message": f"Extracted to {settings.UPLOAD_DIR}"}
