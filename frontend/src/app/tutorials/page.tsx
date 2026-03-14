@@ -6,6 +6,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 
 const CATS = ['All', 'Python', 'AI/ML', 'Data Science', 'Web Dev', 'DevOps', 'Projects'];
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -28,6 +29,7 @@ export default function BlogPage() {
       const merged = [...tutorials, ...projects].sort((a, b) =>
         new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       );
+      if (merged.length === 0) toast.error('Failed to load posts. Please refresh.');
       setPosts(merged);
     }).finally(() => setLoading(false));
   }, [category]);

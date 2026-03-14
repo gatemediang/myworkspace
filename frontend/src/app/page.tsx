@@ -259,7 +259,7 @@ export default function HomePage() {
     setLoadingProjects(true);
     api.get(`/projects?category=${activeTab}`)
       .then(res => setProjects(res.data.slice(0, 5)))
-      .catch(() => setProjects([]))
+      .catch(() => { setProjects([]); toast.error('Failed to load projects.'); })
       .finally(() => setLoadingProjects(false));
   }, [activeTab]);
 

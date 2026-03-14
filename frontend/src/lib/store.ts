@@ -37,6 +37,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem('ws_token', access_token);
       localStorage.setItem('ws_user', JSON.stringify(user));
       set({ user, token: access_token });
+    } catch (err: any) {
+      set({ isLoading: false });
+      const msg = err?.response?.data?.detail || err?.message || 'Login failed. Please try again.';
+      throw new Error(msg);
     } finally {
       set({ isLoading: false });
     }
@@ -50,6 +54,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem('ws_token', access_token);
       localStorage.setItem('ws_user', JSON.stringify(user));
       set({ user, token: access_token });
+    } catch (err: any) {
+      set({ isLoading: false });
+      const msg = err?.response?.data?.detail || err?.message || 'Sign up failed. Please try again.';
+      throw new Error(msg);
     } finally {
       set({ isLoading: false });
     }

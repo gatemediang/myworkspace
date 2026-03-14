@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
 import { Download, Award, GraduationCap, Users } from 'lucide-react';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 
 const DEFAULT_ABOUT = {
   name: 'Tunji Ologun',
@@ -88,10 +89,10 @@ export default function MeetMePage() {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
   useEffect(() => {
-    api.get('/about').then(res => { if (res.data?.name) setAbout({ ...DEFAULT_ABOUT, ...res.data }); }).catch(() => {});
-    api.get('/certifications').then(res => { if (Array.isArray(res.data)) setCertifications(res.data); }).catch(() => {});
-    api.get('/education').then(res => { if (Array.isArray(res.data)) setEducation(res.data); }).catch(() => {});
-    api.get('/clients').then(res => { if (Array.isArray(res.data)) setClients(res.data); }).catch(() => {});
+    api.get('/about').then(res => { if (res.data?.name) setAbout({ ...DEFAULT_ABOUT, ...res.data }); }).catch(() => toast.error('Failed to load profile.'));
+    api.get('/certifications').then(res => { if (Array.isArray(res.data)) setCertifications(res.data); }).catch(() => toast.error('Failed to load certifications.'));
+    api.get('/education').then(res => { if (Array.isArray(res.data)) setEducation(res.data); }).catch(() => toast.error('Failed to load education.'));
+    api.get('/clients').then(res => { if (Array.isArray(res.data)) setClients(res.data); }).catch(() => toast.error('Failed to load clients.'));
   }, []);
 
   return (

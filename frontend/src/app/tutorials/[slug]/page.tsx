@@ -8,6 +8,7 @@ import Footer from '@/components/layout/Footer';
 import ChatBot from '@/components/chat/ChatBot';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
+import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -26,14 +27,21 @@ export default function TutorialDetail() {
 
   useEffect(() => {
     if (!slug) return;
-    api.get(`/tutorials/${slug}`).then(r => setTutorial(r.data)).finally(() => setLoading(false));
+    api.get(`/tutorials/${slug}`)
+      .then(r => setTutorial(r.data))
+      .catch(() => toast.error('Failed to load post. Please refresh.'))
+      .finally(() => setLoading(false));
   }, [slug]);
 
   const handleLike = async () => {
     if (!user || liked) return;
-    await api.post(`/tutorials/${slug}/like`);
-    setTutorial((p: any) => ({ ...p, likes_count: p.likes_count + 1 }));
-    setLiked(true);
+    try {
+      await api.post(`/tutorials/${slug}/like`);
+      setTutorial((p: any) => ({ ...p, likes_count: p.likes_count + 1 }));
+      setLiked(true);
+    } catch {
+      toast.error('Failed to like. Please try again.');
+    }
   };
 
   const handleComment = async (e: React.FormEvent) => {
@@ -45,6 +53,8 @@ export default function TutorialDetail() {
       setComment('');
       const r = await api.get(`/tutorials/${slug}`);
       setTutorial(r.data);
+    } catch {
+      toast.error('Failed to post comment. Please try again.');
     } finally { setSubmittingComment(false); }
   };
 

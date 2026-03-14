@@ -310,7 +310,7 @@ export default function AdminPage() {
                               await api.patch(`/admin/appointments/${item.id}/status`, { status: newStatus });
                               setData((prev: any[]) => prev.map((d: any) => d.id === item.id ? { ...d, status: newStatus } : d));
                             } catch(err) {
-                              alert('Failed to update status. Please try again.');
+                              toast.error('Failed to update status. Please try again.');
                             }
                           }}
                           className="text-xs rounded-lg px-2 py-1 font-bold border-0 cursor-pointer"
@@ -362,8 +362,12 @@ export default function AdminPage() {
                 </div>
                 <select defaultValue={u.role}
                   onChange={async (e) => {
-                    await api.put(`/admin/users/${u.id}/role?role=${e.target.value}`);
-                    toast.success('Role updated!');
+                    try {
+                      await api.put(`/admin/users/${u.id}/role?role=${e.target.value}`);
+                      toast.success('Role updated!');
+                    } catch {
+                      toast.error('Failed to update role. Please try again.');
+                    }
                   }}
                   className="form-input w-36 py-1.5 text-sm">
                   <option value="guest">Guest</option>

@@ -15,7 +15,7 @@ export default function FreebiesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    api.get('/freebies').then(res => setFreebies(res.data)).catch(() => setFreebies([])).finally(() => setLoading(false));
+    api.get('/freebies').then(res => setFreebies(res.data)).catch(() => { setFreebies([]); toast.error('Failed to load freebies. Please refresh.'); }).finally(() => setLoading(false));
   }, []);
 
   const handleDownload = async (e: React.FormEvent) => {

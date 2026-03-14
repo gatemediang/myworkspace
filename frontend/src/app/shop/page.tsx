@@ -17,7 +17,7 @@ export default function ShopPage() {
   const [showCheckout, setShowCheckout] = useState(false);
 
   useEffect(() => {
-    api.get('/products').then(res => setProducts(res.data)).catch(() => setProducts([])).finally(() => setLoading(false));
+    api.get('/products').then(res => setProducts(res.data)).catch(() => { setProducts([]); toast.error('Failed to load products. Please refresh.'); }).finally(() => setLoading(false));
   }, []);
 
   const addToCart = (product: any) => {
