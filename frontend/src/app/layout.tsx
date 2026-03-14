@@ -15,8 +15,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* Runtime backend URL — read by api.ts on the client */}
-        <meta name="backend-url" content={BACKEND_URL} />
+        {/* Inject backend URL at runtime — read by getBackendUrl() in api.ts */}
+        <script dangerouslySetInnerHTML={{ __html: `window.__BACKEND_URL__=${JSON.stringify(BACKEND_URL)}` }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet" />

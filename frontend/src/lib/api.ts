@@ -1,11 +1,9 @@
 import axios from 'axios';
 
-// Reads the backend URL injected by layout.tsx at runtime.
-// Falls back to env var in SSR or empty string if meta tag is missing.
+// Reads the backend URL injected by layout.tsx at runtime via window.__BACKEND_URL__
 export function getBackendUrl(): string {
   if (typeof window === 'undefined') return process.env.BACKEND_URL || 'http://localhost:8000';
-  const meta = document.querySelector('meta[name="backend-url"]');
-  return meta?.getAttribute('content') || '';
+  return (window as any).__BACKEND_URL__ || '';
 }
 
 export const API_URL = getBackendUrl();
