@@ -8,8 +8,9 @@ export const metadata: Metadata = {
   keywords: 'AI, ML, Machine Learning, Data Analysis, Full Stack, Portfolio',
 };
 
-// Server component — can read env vars at runtime (no baking needed)
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+// Empty string → client uses relative URLs (/uploads/..., /api/...)
+// Next.js rewrites and route handlers proxy them to the backend.
+const BACKEND_URL = '';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
