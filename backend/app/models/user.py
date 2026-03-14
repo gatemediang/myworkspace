@@ -25,6 +25,8 @@ class User(Base):
     avatar_url      = Column(String(500), nullable=True)
     oauth_provider  = Column(String(50), nullable=True)    # 'google', 'github', or None
     oauth_id        = Column(String(200), nullable=True)
+    email_confirmed     = Column(Boolean, default=False)
+    confirm_token       = Column(String(200), nullable=True)
     reset_token         = Column(String(200), nullable=True)
     reset_token_expires = Column(DateTime(timezone=True), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())

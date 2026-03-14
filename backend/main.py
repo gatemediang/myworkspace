@@ -113,6 +113,10 @@ def run_migrations():
         db.execute(text("ALTER TABLE hero_slides ADD COLUMN IF NOT EXISTS subtitle VARCHAR(300)"))
         db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)"))
         db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ"))
+        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmed BOOLEAN DEFAULT FALSE"))
+        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token VARCHAR(200)"))
+        # Mark existing users (seeded admins) as already confirmed
+        db.execute(text("UPDATE users SET email_confirmed = TRUE WHERE email_confirmed IS NULL OR email_confirmed = FALSE AND role IN ('admin','superuser')"))
         db.commit()
     except Exception as e:
         print(f"Migration note: {e}")

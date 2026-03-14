@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '@/lib/store';
 import toast from 'react-hot-toast';
 import { AlertCircle } from 'lucide-react';
@@ -33,12 +33,14 @@ export default function LoginPage() {
   const [form, setForm] = useState({ full_name: '', email: '', password: '', confirmPassword: '', phone: '' });
   const [showPass, setShowPass] = useState(false);
   const [formError, setFormError] = useState('');
+  const [signupSuccess, setSignupSuccess] = useState(false);
   const { login, register, isLoading } = useAuthStore();
   const router = useRouter();
 
   const switchMode = (m: 'login' | 'signup') => {
     setMode(m);
     setFormError('');
+    setSignupSuccess(false);
     setForm(p => ({ ...p, confirmPassword: '', password: '' }));
   };
 
@@ -52,14 +54,18 @@ export default function LoginPage() {
       if (mode === 'login') {
         await login(form.email, form.password);
         toast.success('Welcome back!');
+        router.push('/');
       } else {
         await register({ full_name: form.full_name, email: form.email, password: form.password, phone: form.phone });
-        toast.success('Account created! Welcome to MyWorkSpace.');
+        setSignupSuccess(true);
       }
-      router.push('/');
     } catch (err: any) {
-      const msg = err?.message || (mode === 'signup' ? 'Sign up failed. Please try again.' : 'Login failed. Please check your email and password.');
-      setFormError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      const raw = err?.message || '';
+      if (raw === 'UNCONFIRMED_EMAIL') {
+        setFormError('Please confirm your email before logging in. Check your inbox for the confirmation link.');
+      } else {
+        setFormError(raw || (mode === 'signup' ? 'Sign up failed. Please try again.' : 'Login failed. Please check your email and password.'));
+      }
     }
   };
 
@@ -103,7 +109,24 @@ export default function LoginPage() {
             {mode === 'login' ? 'Welcome Back' : 'Create Account'}
           </h2>
 
+          {/* ── Signup success ── */}
+          {signupSuccess && (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(0,168,98,0.15)', border: '2px solid rgba(0,168,98,0.4)' }}>
+                <CheckCircle size={28} style={{ color: 'var(--green)' }} />
+              </div>
+              <h3 className="text-lg font-bold text-[var(--text-primary)]" style={{ fontFamily: 'Orbitron' }}>Check your inbox</h3>
+              <p className="text-sm text-[var(--text-secondary)] text-center">
+                We sent a confirmation link to <strong className="text-[var(--text-primary)]">{form.email}</strong>.
+                Click it to activate your account, then come back to log in.
+              </p>
+              <button onClick={() => switchMode('login')} className="btn-primary mt-2">Back to Login</button>
+            </div>
+          )}
+
           {/* ── Social login buttons ── */}
+          {!signupSuccess && (<>
           <div className="flex gap-3 mb-6">
             <button
               type="button"
@@ -213,13 +236,15 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {mode === 'login' && (
+          </>)}
+
+          {!signupSuccess && mode === 'login' && (
             <p className="text-center text-xs text-[var(--text-secondary)] mt-4">
               No account yet?{' '}
               <button onClick={() => switchMode('signup')} className="text-[var(--green)] hover:underline">Sign up free</button>
             </p>
           )}
-          {mode === 'signup' && (
+          {!signupSuccess && mode === 'signup' && (
             <p className="text-center text-xs text-[var(--text-secondary)] mt-4">
               Already have an account?{' '}
               <button onClick={() => switchMode('login')} className="text-[var(--green)] hover:underline">Login here</button>

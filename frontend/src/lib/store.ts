@@ -49,11 +49,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (data) => {
     set({ isLoading: true });
     try {
-      const res = await api.post('/auth/register', data);
-      const { access_token, user } = res.data;
-      localStorage.setItem('ws_token', access_token);
-      localStorage.setItem('ws_user', JSON.stringify(user));
-      set({ user, token: access_token });
+      await api.post('/auth/register', data);
+      // Registration no longer auto-logs in — user must confirm email first
     } catch (err: any) {
       set({ isLoading: false });
       const msg = err?.response?.data?.detail || err?.message || 'Sign up failed. Please try again.';

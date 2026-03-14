@@ -105,6 +105,7 @@ class RegisterRequest(BaseModel):
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
+    confirm_token = secrets.token_urlsafe(32)
     user = User(
         full_name=req.full_name,
         email=req.email,
@@ -112,15 +113,24 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         hashed_password=get_password_hash(req.password),
         role=UserRole.guest,
         is_active=True,
+        email_confirmed=False,
+        confirm_token=confirm_token,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token({"sub": str(user.id)})
-    return {
-        "access_token": token, "token_type": "bearer",
-        "user": {"id": user.id, "email": user.email, "role": user.role.value, "full_name": user.full_name}
-    }
+    confirm_url = f"{settings.APP_URL}/confirm-email?token={confirm_token}"
+    html = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#040f1e;color:#e8f4ff;border-radius:12px;border:1px solid rgba(0,168,98,0.3)">
+      <h2 style="color:#00a862;font-size:1.4rem;margin-bottom:8px">Confirm your email</h2>
+      <p style="color:#94a3b8;margin-bottom:8px">Hi {user.full_name},</p>
+      <p style="color:#94a3b8;margin-bottom:24px">Click the button below to confirm your email address and activate your account.</p>
+      <a href="{confirm_url}" style="display:inline-block;background:#00a862;color:#000;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:1rem">Confirm Email</a>
+      <p style="color:#64748b;font-size:0.8rem;margin-top:24px">If you didn't create this account, you can safely ignore this email.</p>
+    </div>
+    """
+    send_email(user.email, "Confirm your MyWorkSpace email", html)
+    return {"message": "Account created. Please check your email to confirm your address before logging in."}
 
 @router.post("/auth/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -129,6 +139,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="Invalid credentials. Please check your email and password.")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account disabled. Please contact support.")
+    if not user.email_confirmed:
+        raise HTTPException(status_code=403, detail="UNCONFIRMED_EMAIL")
     token = create_access_token({"sub": str(user.id)})
     return {
         "access_token": token, "token_type": "bearer",
@@ -190,6 +202,35 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     user.reset_token_expires = None
     db.commit()
     return {"message": "Password updated successfully. You can now log in."}
+
+@router.get("/auth/confirm-email")
+def confirm_email(token: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.confirm_token == token).first()
+    if not user:
+        raise HTTPException(400, "Invalid or already used confirmation link.")
+    user.email_confirmed = True
+    user.confirm_token = None
+    db.commit()
+    return {"message": "Email confirmed! You can now log in."}
+
+@router.post("/auth/resend-confirmation")
+def resend_confirmation(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user or user.email_confirmed:
+        return {"message": "If that email exists and is unconfirmed, a new link has been sent."}
+    confirm_token = secrets.token_urlsafe(32)
+    user.confirm_token = confirm_token
+    db.commit()
+    confirm_url = f"{settings.APP_URL}/confirm-email?token={confirm_token}"
+    html = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#040f1e;color:#e8f4ff;border-radius:12px;border:1px solid rgba(0,168,98,0.3)">
+      <h2 style="color:#00a862;font-size:1.4rem;margin-bottom:8px">Confirm your email</h2>
+      <p style="color:#94a3b8;margin-bottom:24px">Click the button below to confirm your email address and activate your account.</p>
+      <a href="{confirm_url}" style="display:inline-block;background:#00a862;color:#000;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:1rem">Confirm Email</a>
+    </div>
+    """
+    send_email(user.email, "Confirm your MyWorkSpace email", html)
+    return {"message": "If that email exists and is unconfirmed, a new link has been sent."}
 
 @router.get("/auth/me")
 def get_me(current_user: User = Depends(get_current_active_user)):
