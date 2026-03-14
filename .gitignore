@@ -1,6 +1,7 @@
 # Environment variables
 .env
 .env_back
+backend/.env
 
 # Documentation
 CODESPACES_SETUP.md
