@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     APP_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"
-    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIR: str = "/app/uploads"
     MAX_FILE_SIZE: int = 52428800
 
     # Comma-separated list of allowed CORS origins.

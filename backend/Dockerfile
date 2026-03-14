@@ -17,19 +17,19 @@ COPY . .
 # volume-backed path and copy the file there at deploy time.
 
 RUN mkdir -p \
-    uploads/projects \
-    uploads/tutorials \
-    uploads/product_images \
-    uploads/products \
-    uploads/freebies \
-    uploads/freebie_images \
-    uploads/about \
-    uploads/settings \
-    uploads/hero_slides \
-    uploads/project_sourcecode \
-    uploads/certifications \
-    uploads/education \
-    uploads/clients
+    /app/uploads/projects \
+    /app/uploads/tutorials \
+    /app/uploads/product_images \
+    /app/uploads/products \
+    /app/uploads/freebies \
+    /app/uploads/freebie_images \
+    /app/uploads/about \
+    /app/uploads/settings \
+    /app/uploads/hero_slides \
+    /app/uploads/project_sourcecode \
+    /app/uploads/certifications \
+    /app/uploads/education \
+    /app/uploads/clients
 
 EXPOSE 8000
 

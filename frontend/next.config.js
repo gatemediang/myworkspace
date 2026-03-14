@@ -14,7 +14,7 @@ const nextConfig = {
   },
   async rewrites() {
     // /uploads/* still proxied via rewrite (served directly from backend)
-    const backendUrl = process.env.BACKEND_URL || process.env.BACKEND_INTERNAL_URL || 'http://backend:8000';
+    const backendUrl = process.env.BACKEND_URL || 'http://myworkspace.railway.internal:8000';
     return [
       {
         source: '/uploads/:path*',
