@@ -1,0 +1,26 @@
+# Environment variables
+.env
+.env_back
+
+# Documentation
+CODESPACES_SETUP.md
+
+# Service account credentials
+rapid-will-490011-p9-dd95789810e6.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Uploads (local dev)
+backend/uploads/
+
+# Misc
+*.log
