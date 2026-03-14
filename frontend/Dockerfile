@@ -10,9 +10,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# These build args bake the public env vars into the bundle at build time
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+# Use a unique placeholder — replaced at container startup via docker-entrypoint.sh
+ARG NEXT_PUBLIC_API_URL=__NEXT_PUBLIC_API_URL__
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=__NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY__
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -34,6 +34,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
 USER nextjs
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["./docker-entrypoint.sh"]
