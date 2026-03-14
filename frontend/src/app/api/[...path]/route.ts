@@ -18,11 +18,17 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
     body = await request.arrayBuffer();
   }
 
-  const res = await fetch(url, {
-    method: request.method,
-    headers,
-    body: body ?? undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: request.method,
+      headers,
+      body: body ?? undefined,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: 'Backend unreachable', detail: message, url }, { status: 502 });
+  }
 
   const data = await res.arrayBuffer();
   return new NextResponse(data, {
