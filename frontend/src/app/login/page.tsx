@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react';
 import { useAuthStore } from '@/lib/store';
 import toast from 'react-hot-toast';
+import { AlertCircle } from 'lucide-react';
 
 // Social login icon components (inline SVG — no extra library needed)
 function GoogleIcon() {
@@ -31,18 +32,21 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [form, setForm] = useState({ full_name: '', email: '', password: '', confirmPassword: '', phone: '' });
   const [showPass, setShowPass] = useState(false);
+  const [formError, setFormError] = useState('');
   const { login, register, isLoading } = useAuthStore();
   const router = useRouter();
 
   const switchMode = (m: 'login' | 'signup') => {
     setMode(m);
+    setFormError('');
     setForm(p => ({ ...p, confirmPassword: '', password: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (mode === 'signup' && form.password !== form.confirmPassword) {
-      toast.error('Passwords do not match'); return;
+      setFormError('Passwords do not match'); return;
     }
     try {
       if (mode === 'login') {
@@ -54,23 +58,15 @@ export default function LoginPage() {
       }
       router.push('/');
     } catch (err: any) {
-      // Support both Axios-style (err.response.data.detail) and
-      // fetch-style (err.detail) and plain Error (err.message)
-      const msg =
-        err?.response?.data?.detail ||
-        err?.detail ||
-        err?.message ||
-        (mode === 'signup'
-          ? 'Sign up failed. Please try again.'
-          : 'Login failed. Please check your email and password.');
-      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      const msg = err?.message || (mode === 'signup' ? 'Sign up failed. Please try again.' : 'Login failed. Please check your email and password.');
+      setFormError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
   // Google / GitHub — note: these require backend OAuth2 routes to be configured.
   // For now they show a friendly message.
   const handleSocialLogin = (provider: string) => {
-    toast(`${provider} login coming soon! Please use email/password for now.`, { icon: 'ℹ️' });
+    setFormError(`${provider} login coming soon! Please use email/password for now.`);
   };
 
   // Shared input padding style — keeps icon and text separated
@@ -192,6 +188,13 @@ export default function LoginPage() {
                     onChange={e => setForm(p => ({ ...p, confirmPassword: e.target.value }))}
                     className="form-input" style={iconInput} placeholder="••••••••" />
                 </div>
+              </div>
+            )}
+
+            {formError && (
+              <div className="flex items-start gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+                <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+                <span>{formError}</span>
               </div>
             )}
 
