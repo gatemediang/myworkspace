@@ -8,9 +8,10 @@ export const metadata: Metadata = {
   keywords: 'AI, ML, Machine Learning, Data Analysis, Full Stack, Portfolio',
 };
 
-// Empty string → client uses relative URLs (/uploads/..., /api/...)
-// Next.js rewrites and route handlers proxy them to the backend.
-const BACKEND_URL = '';
+// Public backend URL injected for the browser (image src, direct API calls).
+// BACKEND_PUBLIC_URL must be set in Railway frontend env vars to the backend's
+// public Railway URL, e.g. https://myworkspace-production.up.railway.app
+const BACKEND_URL = process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_URL || 'http://localhost:8000';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
