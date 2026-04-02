@@ -225,9 +225,7 @@ APP_URL=https://yoursite.railway.app          # Frontend public URL
 BACKEND_URL=https://api.yoursite.railway.app  # Backend public URL
 ALLOWED_ORIGINS=https://yoursite.railway.app  # Comma-separated CORS origins
 
-# ── Google Calendar ───────────────────────────────────────────────
-GOOGLE_CREDENTIALS_PATH=/app/google-credentials.json
-GOOGLE_CALENDAR_ID=your_calendar_id@group.calendar.google.com
+
 
 # ── Uploads ───────────────────────────────────────────────────────
 UPLOAD_DIR=uploads
@@ -247,10 +245,7 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 
 Created automatically on first boot — **change both passwords immediately**.
 
-| Role | Email | Password |
-|------|-------|----------|
-| Superuser | `super@myworkspace.snipal.uk` | `Super@123` |
-| Admin | `admin@workspace.com` | `Admin@123` |
+
 
 ---
 
@@ -299,20 +294,100 @@ The `/admin` page is a single-page CMS covering every content area:
 
 ## GAB — AI Chatbot
 
-**GAB** (Tunji's Personal AI Assistant) is embedded as a floating widget on every page.
+**GAB** (Tunji's Personal AI Assistant) is a purpose-built, context-aware conversational AI embedded as a floating widget on every page of MyWorkSpace. It is powered by **Google Gemini** (`gemini-flash-latest`) and a custom **Retrieval-Augmented Generation (RAG)** pipeline — no vector databases, no third-party AI frameworks, just clean and purposeful engineering.
 
-### How it works
+> For full technical documentation see [`RAG_README.md`](./RAG_README.md).
 
-1. **RAG context** — on every message, `build_context()` queries the live database and injects: projects, published tutorials, active products, freebies, FAQs, upcoming appointments, and the About Me section.
-2. **Gemini Flash** — the context + system prompt are sent to `gemini-flash-latest`. The system prompt can be overridden at runtime via Bot Settings in the admin dashboard.
-3. **Conversation flow** — GAB follows a structured intro:
-   - Turn 1: greeting
-   - Turn 2: asks for name + email
-   - Turn 3: personalised welcome, then open conversation
-4. **Appointment booking** — when GAB collects all booking details it embeds an `[APPOINTMENT_REQUEST: ...]` tag in the response. The backend parses it, saves the appointment to the DB, emails admin, creates a Google Calendar event, and schedules 3 email reminders (24 h, 10 h, 1 h before).
-5. **Chat logging** — once name + email are identified from the conversation, the full chat log is saved as a `ContactMessage` and admin is notified by email.
+### RAG Strategy — Database-Driven Context Injection
 
-### Blocked slots
+GAB does not use FAISS, Pinecone, Chroma, or any embedding-based vector store. Instead, it uses **database-driven context injection**:
+
+```
+User Message → Query PostgreSQL → Build Structured Context String → Inject into Gemini Prompt → Response
+```
+
+On every chat message, `build_context(db)` queries the live PostgreSQL database and assembles a fully structured context block containing:
+
+| Context Section | Source Model |
+|---|---|
+| Owner bio & title | `AboutMe` |
+| All portfolio projects (title, category, tech stack, URLs) | `Project` |
+| Published tutorials & blog posts | `Tutorial` |
+| Active shop products (title, price, description) | `Product` |
+| Active free resources | `Freebie` |
+| FAQ question/answer pairs | `FAQ` |
+| Non-cancelled booked appointments (slot conflict prevention) | `Appointment` |
+| Website sections & services offered | Static (hardcoded) |
+
+This context is appended to the system prompt before every Gemini call, ensuring responses are always grounded in live, up-to-date portfolio data.
+
+**Why not FAISS or a vector store?**
+
+| Concern | Vector RAG | GAB's Approach |
+|---|---|---|
+| Dataset size | Large (thousands of docs) | Small, structured (portfolio data) |
+| Data freshness | Requires re-indexing | Always live from DB |
+| Complexity | High (embedding pipeline, index) | Low (SQL queries) |
+| Relevance risk | May miss relevant chunks | Full context, always complete |
+| Maintenance | High | Zero index maintenance |
+
+### Conversation Flow
+
+GAB follows a strict 3-turn onboarding sequence before switching to open-ended assistance:
+
+```
+Turn 1  GAB greets the visitor
+Turn 2  Visitor's first message → GAB requests name + email for lead capture
+Turn 3  Visitor provides name (and optionally email) → GAB greets by first name
+Open    All subsequent turns driven by visitor intent
+```
+
+GAB retains the visitor's name and email throughout the session and uses the first name naturally in follow-up messages.
+
+### Appointment Booking Pipeline
+
+When a visitor expresses intent to book a meeting, GAB collects details conversationally (name, email, phone, preferred date/time, purpose). It reads the `BOOKED APPOINTMENTS` section of the injected context to avoid offering already-taken slots.
+
+Once all details are gathered, Gemini embeds a structured tag in its response:
+
+```
+[APPOINTMENT_REQUEST: name="...", email="...", phone="...", date="...", time="...", message="..."]
+```
+
+The backend parses this tag, strips it from the displayed response, and triggers the full booking pipeline:
+
+1. Save `Appointment` record to PostgreSQL
+2. Send admin HTML notification email
+3. Create Google Calendar event (1-hour block, attendee invited via `sendUpdates='all'`)
+4. Schedule 3 async email reminders: **24 h → 10 h → 1 h** before the appointment
+
+The frontend detects `appointment_booked: true` in the API response and appends a confirmation message to the chat automatically.
+
+### Lead Capture & Chat Logging
+
+When a visitor provides their name and email during onboarding, GAB parses it from conversation history using a pattern match (`Name, email@domain.com`). If both are captured, the full chat session (last 10 messages) is saved as a `ContactMessage` record tagged `[CHAT LOG]` and an admin notification email is sent — ensuring no lead is missed without requiring a manual dashboard check.
+
+### Admin Controls
+
+| Control | How |
+|---|---|
+| **System prompt override** | `PUT /api/admin/bot-settings` — replaces the default persona at runtime |
+| **Chatbot avatar** | `PUT /api/admin/site-settings/chatbot_photo/upload` — custom photo or fallback bot icon |
+| **FAQ quick-prompts** | Managed via the FAQ admin panel; fetched live by the widget at mount |
+
+### Frontend Widget (`ChatBot.tsx`)
+
+Mounted globally in the Next.js layout — available on every page without per-page configuration.
+
+- Floating toggle button (bottom-right) with animated avatar and **"ASK ME"** label
+- Opens a `520px` chat panel with gradient header
+- FAQ questions rendered as clickable quick-prompt buttons on first open
+- Message history with **`react-markdown`** rendering for rich, formatted bot responses
+- Animated three-dot typing indicator during API calls
+- Full conversation history (last 10 messages) sent with each request for multi-turn context
+- Responsive: `w-80` on mobile → `md:w-96` on desktop
+
+### Blocked Slots
 
 `GET /api/blocked-slots` returns all booked appointment date/time pairs so the frontend (and GAB) can avoid offering already-taken slots.
 
