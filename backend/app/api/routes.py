@@ -602,8 +602,8 @@ def get_tutorials(category: Optional[str] = None, db: Session = Depends(get_db))
         q = q.filter(Tutorial.category == category)
     tutorials = q.order_by(Tutorial.created_at.desc()).limit(30).all()
     return [{"id": t.id, "title": t.title, "slug": t.slug, "summary": t.summary,
-             "image_url": t.image_url, "video_url": t.video_url, "category": t.category,
-             "views": t.views, "created_at": str(t.created_at),
+             "content": t.content, "image_url": t.image_url, "video_url": t.video_url,
+             "category": t.category, "views": t.views, "created_at": str(t.created_at),
              "author": t.author.full_name if t.author else "Admin",
              "likes_count": len(t.likes), "comments_count": len(t.comments)}
             for t in tutorials]

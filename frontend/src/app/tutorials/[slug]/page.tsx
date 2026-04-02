@@ -9,10 +9,6 @@ import ChatBot from '@/components/chat/ChatBot';
 import api, { getBackendUrl } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import toast from 'react-hot-toast';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 
 export default function TutorialDetail() {
@@ -132,25 +128,9 @@ export default function TutorialDetail() {
           })()}
 
           {/* Content */}
-          <div className="glass-card p-8 rounded-2xl mb-8 prose prose-invert max-w-none rich-content">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code({ node, className, children, ...props }: any) {
-                  const match = /language-(\w+)/.exec(className || '');
-                  return match ? (
-                    <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div">
-                      {String(children).replace(/\n$/, '')}
-                    </SyntaxHighlighter>
-                  ) : (
-                    <code className="bg-[#0d1117] text-[var(--cyan)] px-1.5 py-0.5 rounded text-sm" {...props}>{children}</code>
-                  );
-                },
-              }}
-            >
-              {tutorial.content}
-            </ReactMarkdown>
-          </div>
+          <div className="glass-card p-8 rounded-2xl mb-8 prose prose-invert max-w-none rich-content"
+            dangerouslySetInnerHTML={{ __html: tutorial.content_html || tutorial.content }}
+          />
 
           {/* Like */}
           <div className="flex items-center gap-4 mb-10">

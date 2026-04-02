@@ -1,4 +1,5 @@
 import os
+import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
@@ -6,12 +7,17 @@ from datetime import datetime, timedelta
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 def get_calendar_service():
-    creds_path = os.getenv("GOOGLE_CREDENTIALS_PATH", "/app/google-credentials.json")
-    if not os.path.exists(creds_path):
-        print(f"[CALENDAR] Credentials not found at {creds_path}")
-        return None
+    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
     try:
-        creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+        if creds_json:
+            info = json.loads(creds_json)
+            creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
+        else:
+            creds_path = os.getenv("GOOGLE_CREDENTIALS_PATH", "/app/google-credentials.json")
+            if not os.path.exists(creds_path):
+                print(f"[CALENDAR] Credentials not found at {creds_path}")
+                return None
+            creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
         return build('calendar', 'v3', credentials=creds)
     except Exception as e:
         print(f"[CALENDAR] Auth error: {e}")
