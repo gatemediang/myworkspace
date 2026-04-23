@@ -5,7 +5,9 @@
 A production-ready personal portfolio and digital business platform. Includes a CMS admin dashboard, AI-powered chatbot assistant, Stripe e-commerce, newsletter system, Google Calendar appointment booking, and a full blog/tutorial engine.
 
 ---
-
+<a href="https://frontend-production-b9dc.up.railway.app/" target="_blank">
+  <img src="https://img.shields.io/badge/🚀 Live Demo-Click Here-blue?style=for-the-badge" alt="Live Demo"/>
+</a>
 ## Table of Contents
 
 - [Architecture](#architecture)
