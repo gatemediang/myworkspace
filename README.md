@@ -8,6 +8,8 @@ A production-ready personal portfolio and digital business platform. Includes a 
 <a href="https://frontend-production-b9dc.up.railway.app/" target="_blank">
   <img src="https://img.shields.io/badge/🚀 Live Demo-Click Here-blue?style=for-the-badge" alt="Live Demo"/>
 </a>
+
+
 ## Table of Contents
 
 - [Architecture](#architecture)
